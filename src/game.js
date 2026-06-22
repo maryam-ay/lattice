@@ -9,298 +9,124 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
 // -------------------------------------------------------------------
-//  WORD LIST
-//  A compact, bundled list of common 3-6 letter English words. Heavy
-//  on 3 and 4 letter words because every grid line is only 4 cubes
-//  long. Built into a Set for O(1) lookups. The regex guard means any
-//  stray token is silently ignored rather than corrupting the set.
+//  DICTIONARY
+//  No bundled word list. On startup we fetch a full validated English
+//  dictionary (370k+ words, one per line) and load it into a Set for
+//  O(1) lookups. A small built-in list is used ONLY if that fetch fails
+//  so the game stays playable offline. Minimum word length is 3.
 // -------------------------------------------------------------------
-const WORD_SOURCE = `
-ace act add ado age ago aid ail aim air ale all amp and ant any ape apt arc are ark
-arm art ash ask asp ate awe axe aye bad bag ban bar bat bay bed bee beg bet bid big
-bin bit boa bob bog boo bow box boy bra bud bug bun bus but buy cab cad cam can cap
-car cat cob cod cog con coo cop cot cow coy cry cub cue cup cur cut dab dad dam day
-den dew did die dig dim din dip doe dog don dot dry dub due dug duo dye ear eat ebb
-eel egg ego elf elk elm emu end era erg eve ewe eye fad fan far fat fax fed fee fen
-few fib fig fin fir fit fix flu fly foe fog for fox fro fry fun fur gab gag gal gap
-gas gel gem get gig gin god goo got gum gun gut guy gym had hag ham has hat hay hem
-hen her hew hex hey hid him hip his hit hoe hog hop hot how hub hue hug hum hut ice
-icy ill imp ink inn ion ire irk its ivy jab jag jam jar jaw jay jet jig job jog jot
-joy jug jut keg key kid kin kit lab lad lag lap law lax lay led leg let lid lie lip
-lit lob log lop lot low lug lye mad man map mar mat maw may men met mid mix mob mod
-mom mop mud mug mum nab nag nap nay net new nil nip nit nod nor not now nub nut oaf
-oak oar oat odd ode off oft ohm oil old one opt orb ore our out owe owl own pad pal
-pan par pat paw pay pea peg pen pet pew pie pig pin pit ply pod pop pot pro pry pub
-pug pun pup pus put rad rag ram ran rap rat raw ray red ref rep rev rib rid rig rim
-rip rob rod roe rot row rub rue rug rum run rut rye sad sag sap sat saw say sea see
-set sew she shy sin sip sir sit six ski sky sly sob sod son sop sot sow soy spa spy
-sty sub sue sum sun sup tab tad tag tan tap tar tat tax tea ten the thy tic tie til
-tin tip tit toe tog tom ton too top tot tow toy try tub tug tun tut two ugh urn use
-van vat vet vex via vie vim vow wad wag wan war was wax way web wed wee wet who why
-wig win wit woe wok won woo wow wry yak yam yap yaw yea yen yes yet yew yin yip you
-zag zap zed zee zig zip zit zoo
-able acid aces acre afar aged ages aide ails aims airs ajar akin alas ales ally aloe
-also alto amid amok amps anew ante anti ants apex apse aqua arch arcs area ares aria
-arid arms army arts ashy atom atop aunt aura auto avid away awed awes axes axis axle
-babe baby back bade bags bail bait bake bald bale ball balm band bane bang bank bans
-barb bard bare barn bars base bash bask bass bath bats bays bead beak beam bean bear
-beat beds beef been beep beer bees begs bell belt bend bent best bets bias bids bike
-bile bill bind bird bite bits blob blot blow blue blur boar boat body bogs boil bold
-bolt bomb bond bone bony book boom boon boot bore born boss both bout bowl bows boys
-brag bran bras bred brew brim brow buck buds buff bugs bulb bulk bull bump bums bunk
-buns bunt buoy burn burr burs bury bush bust busy butt buys buzz cabs cafe cage cake
-calf call calm came camp cane cans cape caps card care carp cars cart case cash cask
-cast cats cave cell cent chap char chat chef chew chin chip chop chum cite city clad
-clam clan clap claw clay clip clod clog clot club clue coal coat coax cobs code coil
-coin cola cold colt coma comb come cone cons cook cool coop cope copy cord core cork
-corn cost cots cove cows cozy crab crag cram crew crib crop crow cube cubs cued cues
-cuff cult cure curl curs curt cusp cute cuts dabs dads daft dais dale dame damp dams
-dare dark darn dart dash data date dawn days daze dead deaf deal dean dear debt deck
-deed deem deep deer dell demo dens dent deny desk dial dice died dies diet digs dime
-dine ding dins dint dire dirt disc dish disk diva dive dock docs does doff dogs dole
-doll dolt dome done dons doom door dope dorm dose dote dots dove down doze drab drag
-dram draw drew drip drop drub drug drum dual duck duct dude duds duel dues duet duke
-dull duly dumb dump dune dung dunk duos dupe dusk dust duty dyed dyes each earl earn
-ears ease east easy eats eave ebbs echo eddy edge edit eels eery eggs egos elks ells
-elms else emit ends envy epic eras ergo errs euro even ever eves evil ewes exam exit
-eyed eyes face fact fade fail fair fake fall fame fang fans fare farm fast fate fats
-fawn fear feat feed feel fees feet fell felt fend fern feud fief fife figs file fill
-film find fine fins fire firm firs fish fist fits five fizz flag flak flap flat flaw
-flax flea fled flee flew flex flip flit floe flog flop flow flue flux foal foam foes
-fold folk fond font food fool foot ford fore fork form fort foul four fowl foxy frat
-fray free fret frog from fuel full fume fund funk furl furs fury fuse fuss fuzz gags
-gain gait gala gale gall game gang gape gaps garb gash gasp gate gave gawk gaze gear
-geek gels gems gene gent germ gets gift gild gill gilt gins gird girl gist give glad
-glee glen glib glob glow glue glum gnat gnaw goad goal goat gobs gods goes gold golf
-gone gong good goof gore gory gosh gout gown grab gram gray grew grey grid grim grin
-grip grit grow grub gulf gull gulp gums gunk guns guru gush gust guts guys gyms hack
-hags hail hair hale half hall halo halt hams hand hang hard hare hark harm harp hart
-hash hasp hate hats haul have hawk hays haze hazy head heal heap hear heat heed heel
-heft heir held hell helm help hemp hens herb herd here hero hers hewn hick hide high
-hike hill hilt hind hint hire hiss hits hive hoax hobo hock hoes hogs hold hole holy
-home hone honk hood hoof hook hoop hoot hope hops horn hose host hour hove howl hubs
-hued hues huff huge hugs hula hulk hull hump hums hung hunk hunt hurl hurt hush husk
-huts hymn iced ices icon idea idle idly idol iffy ills imps inch info inks inky inns
-into ions iota ired ires iris irks iron isle itch item jabs jack jade jail jamb jams
-jars jaws jays jazz jean jeep jeer jell jerk jest jets jibe jibs jigs jilt jinx jive
-jobs jock jogs join joke jolt josh jots joys judo jugs juke jump junk jury just jute
-keel keen keep kegs kelp kept keys kick kids kill kiln kilo kilt kind king kink kiss
-kite kits kiwi knee knew knit knob knot know labs lace lack lacy lade lads lady laid
-lain lair lake lamb lame lamp land lane laps lard lark lash lass last late lath lava
-lawn laws lays laze lazy lead leaf leak lean leap leek leer left legs lend lens lent
-less lest lets levy liar lice lick lids lied lief lien lies life lift like lilt lily
-limb lime limo limp line link lint lion lips lisp list live load loaf loam loan lobe
-lobs lock loft logo logs loin lone long look loom loon loop loot lord lore lorn lose
-loss lost lots loud love lows luck lull lump lung lure lurk lush lust lute lyes lynx
-mace made maid mail maim main make male mall malt mama mane mans many maps mare mark
-mars mart mash mask mass mast mate math mats maul maws maze mead meal mean meat meek
-meet meld melt memo mend menu meow mere mesh mess mews mica mice mild mile milk mill
-mils mime mind mine mini mink mint mire miss mist mite mitt moan moat mobs mock mode
-mold mole molt moms monk mood moon moor moot mope more morn moss most mote moth move
-mown mows much muck muds muff mugs mule mull mums murk muse mush musk must mute mutt
-myna myth nabs nags nail name nape naps nary navy nays neap near neat neck need neon
-nest nets news newt next nibs nice nick nigh nine nips nits node nods none nook noon
-nope norm nose nosh nosy note noun nous nova nubs nude nuke null numb nuns nuts oaks
-oars oath oats obey oboe odds odes odor offs ogle ogre oils oily oink okay okra omen
-omit once ones only onto onus onyx ooze opal open opts opus oral orbs ores orgy ouch
-ours oust outs oval oven over ovum owed owes owls owns oxen pace pack pact pads page
-paid pail pain pair pale pall palm pals pane pang pans pant papa pard pare park pars
-part pass past pate path pats pave pawn paws pays peak peal pear peas peat peck peek
-peel peer pees pegs pelt pend pens pent peon pere perk perm pert peso pest pets pews
-pica pick pier pies pigs pike pile pill pimp pine ping pink pins pint piny pipe pips
-pita pith pits pity plan play plea pled plod plop plot plow ploy plug plum plus pock
-pods poem poet poke pole poll polo pomp pond pone pong pony pooh pool poor pope pops
-pore pork porn port pose posh post posy pots pour pout pram pray prep prey prig prim
-prod prof prom prop pros prow pubs puck puff pugs puke pull pulp puma pump punk puns
-punt puny pupa pups pure purr push puts putt pyre quad quay quid quip quit quiz race
-rack racy raft rage rags raid rail rain rake ramp rams rang rank rant rape raps rapt
-rare rash rasp rate rats rave raze razz read real ream reap rear reds reed reef reek
-reel refs rein rely rend rent reps rest rhea ribs rice rich rick ride rids rife riff
-rift rigs rile rill rims rind ring rink riot ripe rips rise risk rite road roam roan
-roar robe robs rock rode rods roes roil role roll romp rood roof rook room root rope
-ropy rose rosy rote rots rout rove rows rube rubs ruby rude rued rues ruff rugs ruin
-rule rump rune rung runs runt ruse rush rust ruts sack sacs safe saga sage sago sags
-said sail sake sale salt same sand sane sang sank saps sari sash sass sate save sawn
-saws says scab scam scan scar scat scot scow scud scum seal seam sear seas seat sect
-seed seek seem seen seep seer sees self sell semi send sent sera sere serf sets sewn
-sews shag shah sham shed shew shim shin ship shod shoe shoo shop shot show shun shut
-sick side sift sigh sign silk sill silo silt sing sink sins sire sirs site sits size
-skew skid skim skin skip skit slab slag slam slap slat slaw slay sled slew slid slim
-slip slit slob sloe slog slop slot slow slug slum slur slut smog smug smut snag snap
-snit snob snot snow snub snug soak soap soar sobs sock soda sofa soft soil sold sole
-solo sols some song sons soon soot sops sore sort sots souk soul soup sour sown sows
-soya span spar spas spat spay sped spew spin spit spot spry spud spun spur stab stag
-star stay stem step stew stir stop stow stub stud stun stye subs such suck suds sued
-suer sues suit sulk sumo sump sums sung sunk suns sups sure surf swab swag swam swan
-swap swat sway swig swim swum sync tabs tack taco tact tads tags tail take tale talk
-tall tame tamp tang tank tans tape taps tare tarn taro tarp tars tart task taut taxi
-teak teal team tear teas teat tech teed teem teen tees tell temp tend tens tent term
-tern test text than that thaw thee them then they thin this thou thud thug thus tick
-tide tidy tied tier ties tiff tile till tilt time tine ting tins tint tiny tips tire
-toad toed toes tofu toga togs toil told toll tomb tome toms tone tong tons took tool
-toot tops tore torn tort toss tote tots tour tout town tows toys tram trap tray tree
-trek trim trio trip trod trot troy true tsar tuba tube tubs tuck tuft tugs tuna tune
-tuns turf turn tusk tutu twig twin twit type typo tyre ugly ulna umps undo unit unto
-upon urea urge urns used user uses vain vale vamp vane vans vary vase vast vats veal
-veer veil vein vend vent verb very vest veto vets vial vibe vice vied vies view vile
-vine vino viol visa vise void vole volt vote vows wade wadi wads waft wage wags waif
-wail wait wake wale walk wall wand wane want ward ware warm warn warp wars wart wary
-wash wasp watt wave wavy waxy ways weak weal wean wear webs weds weed week weep weft
-weir weld well welt wend went wept were west wets what when whet whew whey whim whip
-whir whit whiz whoa whom whop wick wide wife wigs wild wile will wilt wily wimp wind
-wine wing wink wins wipe wire wiry wise wish wisp wist with wits wive woes woke woks
-wolf womb wont wood woof wool woos word wore work worm worn wort wove wows wrap wren
-writ yack yams yang yank yard yarn yawl yawn yaws yeah year yeas yell yelp yens yeti
-yews yoga yoke yolk yore your yowl yuck yule zags zany zaps zeal zero zest zinc zing
-zips zits zone zoom zoos
-about above abuse actor acute admit adopt adult after again agent agree ahead alarm
-album alert alike alive allow alone along aloud alpha altar alter amber amend among
-angel anger angle angry ankle apart apple apply arena argue arise armor array arrow
-aside asset audio audit avoid awake award aware awful bacon badge baker basic basin
-batch beach beard beast began begin being below bench berry bible bingo birth black
-blade blame bland blank blast blaze bleak blend blind bliss block blood bloom blown
-blues blunt board boast bonus boost booth borne bound brain brake brand brass brave
-bread break breed brick bride brief bring brink broad broke brook broom brown brush
-brute build built bunch burst cabin cable cache camel candy canon cargo carol carry
-carve catch cause cease cedar chain chair chalk champ chant chaos charm chart chase
-cheap cheat check cheek cheer chess chest chief child chili chill china chirp choir
-chose chuck chunk churn cider cigar civic civil claim clamp clash clasp class clean
-clear clerk click cliff climb cling cloak clock clone close cloth cloud clout clown
-coach coast cobra cocoa colon color comet comic coral couch cough could count court
-cover covet crack craft cramp crane crank crash crate crave crawl craze crazy cream
-creek creep crepe crept crest crime crisp croak crook cross crowd crown crude cruel
-crumb crush crust crypt curio curly curry curse curve cycle daily dairy daisy dance
-dandy dared dates datum dealt death debit debut decay decor delay delta dense depth
-derby deter devil diary digit dimly dined diner dingo dingy dirty disco ditch ditto
-diver dizzy dodge doing donor doubt dough dowel downy dozen draft drain drake drama
-drank drape drawn dread dream dress dried drift drill drink drive droll drone droop
-drove drown drums drunk dryer dummy dusky dusty dwarf dwell dying eager eagle early
-earth easel eaten ebony edged eerie eight elbow elder elect elite empty enact ended
-enemy enjoy enter entry equal equip erase error essay ether evade event every evict
-evoke exact exalt excel exert exile exist extra fable faced facet fairy faith false
-fancy fatal fault favor feast fence ferry fetch fever fewer fiber field fiend fiery
-fifth fifty fight filer filet filly final finch fined finer first fishy fixed fizzy
-flair flake flame flank flare flash flask fleck flesh flick fling flint flirt float
-flock flood floor flora floss flour flout flown fluid fluke flung flush flute flyer
-foamy focal focus foggy folly foray force forge forgo forte forth forty forum found
-frame frank fraud freak fresh fried frill frisk frock frond front frost froth frown
-froze fruit fudge fully fumes funky funny furry fussy fuzzy gable gaily gamer gamma
-gauge gaunt gauze gavel gawky gazer gecko geese genie genre ghost giant giddy gipsy
-given giver glade gland glare glass glaze gleam glean glide glint gloat globe gloom
-glory gloss glove gnome going golem golly goner goody goofy goose gorge gouge gourd
-grace grade graft grain grand grant grape graph grasp grass grate grave gravy graze
-great greed green greet grief grill grime grimy grind gripe groan groin groom grope
-gross group grout grove growl grown gruel gruff grunt guard guess guest guide guild
-guile guilt guise gulch gully gumbo gummy gusto gusty gypsy habit hairy halve handy
-happy hardy harem harsh haste hasty hatch haunt haven havoc hazel heady heart heath
-heave heavy hedge hefty hello hence heron hilly hinge hippo hippy hitch hoard hobby
-hoist holly homer honey honor horde horse hotel hound house hovel hover howdy human
-humid humor hunch hurry husky hydro hyena ideal idiom idiot idler igloo image imbue
-impel imply inane inbox incur index inept inert infer ingot inlet inner input inter
-intro ionic irate irony issue ivory jaded jazzy jeans jelly jenny jerky jetty jewel
-joint joist joker jolly joust judge juice juicy jumbo jumpy junky juror kayak kebab
-kempt ketch khaki kinky kiosk kitty knack knave knead kneel knelt knife knock knoll
-known koala label labor laden lager lance lanky lapel lapse large larva laser later
-latex lathe latte laugh layer leach leafy leaky leant leapt learn lease leash least
-leave ledge leech leery legal lemon lemur level lever libel light liken lilac limbo
-limit lined linen liner lingo lipid liver livid llama loath lobby local locus lodge
-lofty logic loner loony loose lorry loser lotus louse lousy lover lower loyal lucid
-lucky lumen lumpy lunar lunch lunge lurch lurid lusty lying lymph lyric macaw macho
-macro madam madly magic magma maize major maker mango mania manor maple march marry
-marsh mason match mauve maxim maybe mayor mealy meant meaty medal media melee melon
-mercy merge merit merry messy metal meter metro micro midst might mimic mince miner
-minor minus mirth miser mocha modal model modem moist molar moldy money month moody
-moose moral moron morph mossy motel motor motto mound mount mourn mouse mousy mouth
-mover movie mower mucky muddy mulch mummy munch mural murky mushy music musty muted
-nadir naive naked nanny nasal nasty naval navel needy nerdy nerve never newer newly
-nicer niche niece night ninja ninny ninth noble nobly noise noisy nomad noose north
-nosey notch noted novel nudge nurse nutty nylon nymph oasis occur ocean octal octet
-odder odors offer often olden older olive omega onion onset opera opine optic orbit
-order organ ought ounce outdo outer ovary overt owing owner oxide ozone paced paddy
-pagan paint paler palsy panda panel panic pansy papal paper parka parry parse party
-pasta paste pasty patch patio pause peace peach pearl pecan pedal penal pence penny
-peony perch peril perky pesky petal petty phase phone photo piano picky piece piety
-piggy pilot pinch piney pinky pious piper pique pitch pivot pixel pizza place plaid
-plain plait plane plank plant plate plaza plead pleat plied plonk pluck plumb plume
-plump plunk plush poach point poise poker polar polka pooch poppy porch posed poser
-posse pouch pound power prank prawn preen press price prick pride pried prime primp
-print prior prism privy prize probe prone prong proof prose proud prove prowl proxy
-prune pubic pudgy puffy pulpy pulse punch pupil puppy puree purer purge purse pushy
-putty pygmy quack quail quake qualm quart quash quasi queen queer quell query quest
-queue quick quiet quill quilt quirk quite quota quote rabbi rabid racer radar radio
-rainy raise rajah rally ramen ranch randy range rapid raspy ratio raven rayon razor
-reach react ready realm rearm rebel rebut recap recur reedy refer regal rehab reign
-relax relay relic remit renal renew repay repel reply rerun reset resin retch retro
-retry reuse revel rhino rhyme rider ridge rifle right rigid rigor rinse ripen riser
-risky rival river rivet roach roast robin robot rocky rodeo rogue roman roomy roost
-ropey rotor rouge rough round rouse route rover rowdy royal ruddy ruder rugby ruler
-rumba rumor rural rusty saber sadly safer saint salad sally salon salsa salty salve
-salvo sandy saner sappy sassy satin satyr sauce saucy sauna saute saved saver savor
-savvy scald scale scalp scaly scamp scant scare scarf scary scene scent scoff scold
-scone scoop scope score scorn scour scout scowl scrap scrub scrum seedy sepia serif
-serum serve seven sever sewer shack shade shady shaft shake shaky shale shall shame
-shank shape shard share shark sharp shave shawl sheaf shear sheen sheep sheer sheet
-shelf shell shied shift shine shiny shire shirk shirt shoal shock shone shook shoot
-shore shorn short shout shove shown showy shred shrew shrub shrug shuck shunt shush
-shyly sided siege sieve sight sigma silky silly since sinew singe siren sissy sixth
-sixty sized skate skein skier skiff skill skimp skirt skulk skull skunk slack slain
-slang slant slash slate slave sleek sleep sleet slept slice slick slide slime slimy
-sling slink slope slosh sloth slump slung slunk slurp slush small smart smash smear
-smell smelt smile smirk smite smith smock smoke smoky snack snail snake snaky snare
-snarl sneak sneer snide sniff snipe snoop snore snort snout snowy snuff soapy sober
-soggy solar solid solve sonar sonic sooth sooty sorry sound south space spade spank
-spare spark spasm spawn speak spear speck speed spell spend spent sperm spice spicy
-spied spiel spike spiky spill spilt spine spiny spire spite splat split spoil spoke
-spoof spook spool spoon spore sport spout spray spree sprig spunk spurn spurt squad
-squat squib stack staff stage staid stain stair stake stale stalk stall stamp stand
-stank stare stark start stash state stave steak steal steam steed steel steep steer
-stein stern stick stiff still stilt sting stink stint stock stoic stoke stole stomp
-stone stony stood stool stoop store stork storm story stout stove strap straw stray
-strip strut stuck study stuff stump stung stunk stunt style suave sugar suing suite
-sulky sully sunny super surer surge surly sushi swamp swarm swath sweat sweep sweet
-swell swept swift swill swine swing swirl swish swoop sword swore sworn swung syrup
-table taboo tacit tacky taffy taken taker tally talon tamer tango tangy taper tapir
-tardy tarot taste tasty taunt tawny teach tease teddy teeth tempo tempt tenor tense
-tenth tepee tepid terse testy thank theft their theme there these thick thief thigh
-thing think third thong thorn those three threw throb throw thrum thumb thump thyme
-tiara tibia tidal tiger tight tilde timer timid tipsy titan title toast today toddy
-token tonal tonic tooth topaz topic torch torso total totem touch tough towel tower
-toxic toxin trace track tract trade trail train trait tramp trash trawl tread treat
-trend tress triad trial tribe trick tried tries tripe trite troll troop trope trout
-trove truce truck truly trump trunk trust truth tryst tuber tulip tummy tumor tunic
-turbo tutor twang tweak tweed tweet twice twine twirl twist tying udder ulcer ultra
-umbra uncle uncut under undid undue unfit unify union unite unity unlit unmet untie
-until unwed unzip upend upper upset urban urine usage usher using usual usurp utter
-vague valet valid valor value valve vapor vault vegan venom venue verge verse vicar
-video vigil vigor villa vinyl viola viper viral virus visit visor vista vital vivid
-vixen vocal vodka vogue voice voila voted voter vouch vowel wacky wafer wager wagon
-waist waltz waning warty waste watch water waver waxen weary weave wedge weedy weigh
-weird welch welsh whack whale wharf wheat wheel whelp where which whiff while whine
-whiny whirl whisk white whole whoop whose widen wider widow width wield wimpy wince
-winch windy wiser wispy witch witty wives woken woman women woody wooer woozy wordy
-world worry worse worst worth would wound woven wrack wrath wreak wreck wrest wring
-wrist write wrong wrote wrung wryly xenon yacht yearn yeast yield yodel yokel young
-youth yummy zebra zesty zonal
-around before better change family friend ground little mother number people please
-public really school should system things though within without wonder animal basket
-bottle bridge button camera candle carpet castle circle closet coffee corner cotton
-danger doctor dragon energy engine eraser expert famous finger flower forest garden
-golden guitar hammer hidden honest hunter island jacket jungle ladder letter market
-master melody memory mirror monkey moment motion museum native nation nature object
-office orange output packet palace parent person planet player pocket poison police
-potato prince prison puzzle rabbit random reason record region remote report return
-ribbon rocket sailor salmon season secret shadow signal silver simple singer sister
-soccer spider spirit spring square stream street string studio summer sunset switch
-symbol talent target temple tennis theory ticket tissue toward travel tunnel turkey
-twelve twenty valley velvet vision voyage wallet wander weapon weasel window winter
-wisdom wizard wooden worker writer yellow zigzag zombie
-`;
+const DICT_URL =
+  'https://raw.githubusercontent.com/dwyl/english-words/master/words_alpha.txt';
 
-const WORDS = new Set(
-  WORD_SOURCE.toLowerCase()
+let WORDS = new Set(); // filled by loadDictionary() before the game starts
+
+// Emergency fallback — used ONLY if the dictionary fetch fails (offline).
+const FALLBACK_WORDS =
+  `the and for are but not you all can her was one our out day get has him his how its
+  let man new now old see two way who did oil set put got big run top try yet ace act
+  add age ago aid aim air arm art ash ask ate awe axe bad bag ban bar bat bay bed bee
+  beg bet bid boa bow box boy bud bug bus cab cap car cat cob cod cop cot cow cry cub
+  cue cup cut dad dam den dew die dig dim dip dog dot dry due dug dye ear eat eel egg
+  ego elf elk elm end era eve eye fan far fat fax fed fee few fig fin fir fit fix fly
+  foe fog fox fun fur gap gas gem god got gum gun gut guy gym ham has hat hay hen hid
+  hip hit hoe hog hop hot hub hue hug hut ice icy ink inn ion ire ivy jab jam jar jaw
+  jet jig job jog jot joy jug keg key kid kin kit lab lad lap law lay led leg lid lie
+  lip lit log lot low mad map mat men met mix mob mom mop mud mug nab nap net new nod
+  nor not now nut oak oar oat odd off oil old one orb ore our out owe owl own pad pal
+  pan pat paw pay pea pen pet pie pig pin pit pod pop pot pry pub pun pup put rag ram
+  ran rap rat raw ray red rib rid rig rim rip rob rod rot row rub rug rum run rut sad
+  sap sat saw say sea see set sew she shy sin sip sir sit six ski sky sly sob sod son
+  sow soy spa spy sub sue sum sun tab tag tan tap tar tax tea ten the tie tin tip toe
+  ton too top tow toy try tub tug two urn use van vat vet vow wad wag war was wax way
+  web wed wet who why wig win wit woe wok won wow yak yam yap yes yet zap zip zoo area
+  care race real tale late rate able acid also army away baby back ball band bank base
+  bath bear beat been bell belt best bird bite blue boat body bone book boot born both
+  bowl bull burn busy cake call calm came camp card cart case cash cast cell chat city
+  clay club coal coat code cold come cook cool copy core corn cost crew crop dark data
+  date dawn dead deal dear debt deep deer desk dial diet dirt dish done door down draw
+  drop dual duck dust duty each earn ease east easy edge else even ever evil exit face
+  fact fail fair fall fame farm fast fate fear feed feel feet fell felt file fill film
+  find fine fire firm fish five flag flat flow food foot form four free from fuel full
+  fund gain game gate gave gear gift girl give glad goal goes gold golf gone good gray
+  grew grow hair half hall hand hang hard harm hate have head heal hear heat held hell
+  help here hero hide high hill hint hire hold hole holy home hope horn host hour huge
+  hunt hurt idea inch into iron item join joke jump jury just keen keep kept kick kill
+  kind king knee knew know lack lady lake land lane last lead leaf lean left lend less
+  life lift like line link list live load loan lock long look lord lose loss lost loud
+  love luck made mail main make male mall many mark mass mate meal mean meat meet menu
+  mere mild mile milk mill mind mine miss mode mood moon more most move much must name
+  navy near neat neck need news next nice nine none nose note okay once only onto open
+  oven over pace pack page paid pain pair pale palm park part pass past path peak pear
+  peer pick pile pill pine pink pint pipe plan play plot plug plus poem poet pole poll
+  pond pool poor port pose post pour pull pump pure push race rack rage raid rail rain
+  rank rare read real rear rely rent rest rice rich ride ring rise risk road rock role
+  roll roof room root rope rose rule rush safe said sail sake sale salt same sand save
+  seal seat seed seek seem seen self sell send sent ship shop shot show shut sick side
+  sign silk sing sink site size skin slip slow snap snow soap sock soft soil sold sole
+  some song soon sort soul soup spin spot star stay stem step stop suit sure swim tail
+  take tale talk tall tank tape task team tear tell tend term test text than that them
+  then they thin this thus tide tidy tied time tiny told tone took tool tops torn tour
+  town tree trip true tube tune turn type unit upon urge used user vary vast verb very
+  view vote wage wait wake walk wall want ward warm wash wave weak wear week well went
+  were west what when whom wide wife wild will wind wine wing wire wise wish with wood
+  wool word wore work yard yarn year your zero zone about above abuse adult after again
+  agree ahead alarm album alert alike alive allow alone along alter among anger angle
+  angry apart apple apply arena argue arise armor array aside asset audio avoid awake
+  award aware basic batch beach beard beast begin being below bench birth black blade
+  blame blank blast blend blind block blood board boost booth bound brain brand brave
+  bread break breed brick brief bring broad brown brush build built bunch burst cabin
+  cable carry catch cause chain chair chaos charm chart chase cheap check chest chief
+  child china chose civil claim class clean clear click cliff climb clock close cloth
+  cloud coach coast could count court cover crack craft crash crazy cream crime cross
+  crowd crown crude curve cycle daily dairy dance death debut delay dense depth dirty
+  doubt dozen draft drama drawn dream dress drink drive eager eagle early earth eight
+  elder elect elite empty enemy enjoy enter entry equal error event every exact exist
+  extra faith false fancy fatal fault favor fence fewer field fifth fifty fight final
+  first fixed flame flash fleet floor fluid focus force forge forth forty forum found
+  frame fraud fresh front frost fruit fully funny giant given glass globe glory grace
+  grade grain grand grant grape graph grass grave great green greet grief gross group
+  grown guard guess guest guide habit happy heart heavy hello hence honey honor horse
+  hotel house human humor ideal image index inner input issue ivory joint judge juice
+  known label labor large laser later laugh layer learn lease least leave legal lemon
+  level light limit liner local logic loose lower loyal lucky lunch magic major maker
+  march match mayor meant medal media metal meter might minor minus mixed model money
+  month moral motor mount mouse mouth movie music naked nasty nerve never newly night
+  noble noise north noted novel nurse ocean offer often olive onion opera orbit order
+  organ other ought ounce outer owner panel panic paper party paste patch pause peace
+  pearl phase phone photo piano piece pilot pitch place plain plane plant plate plaza
+  point pound power press price pride prime print prior prize proof proud prove pulse
+  punch pupil quick quiet quite radio raise rally range rapid ratio reach react ready
+  realm rebel refer reign relax reply rider ridge rifle right rigid rinse rival river
+  robot rocky rough round route royal rural saint salad sauce scale scene scope score
+  sense serve seven shade shake shall shame shape share sharp sheep sheet shelf shell
+  shift shine shirt shock shoot shore short shown sight silly since sixth sixty skill
+  slate sleep slice slide slope small smart smell smile smoke snake solar solid solve
+  sorry sound south space spare spark speak speed spell spend spent spice spike spine
+  split spoke sport spray squad stack staff stage stair stake stand start state steam
+  steel steep steer stick stiff still stock stone stood stool store storm story strip
+  study stuff style sugar suite sunny super sweet swift swing sword table taken taste
+  teach teeth tempo tenth there these thick thief thing think third those three throw
+  thumb tiger tight tired title toast today token tooth topic total touch tough tower
+  trace track trade trail train trait treat trend trial tribe trick tried troop truck
+  truly trunk trust truth twice twist ultra uncle under union unite unity until upper
+  upset urban usage usual valid value valve video villa vinyl viral virus visit vital
+  vocal voice voter waste watch water wheat wheel where which while white whole whose
+  width woman world worry worse worst worth would wound wrong wrote yield young youth`
     .split(/\s+/)
-    .filter((w) => /^[a-z]{3,}$/.test(w))
-);
+    .filter((w) => /^[a-z]{3,}$/.test(w));
+
+async function loadDictionary() {
+  const res = await fetch(DICT_URL);
+  if (!res.ok) throw new Error('dictionary HTTP ' + res.status);
+  const text = await res.text();
+  const set = new Set();
+  for (const line of text.split(/\r?\n/)) {
+    const w = line.trim().toLowerCase();
+    if (w.length >= 3 && /^[a-z]+$/.test(w)) set.add(w);
+  }
+  if (set.size < 1000) throw new Error('dictionary looked empty');
+  return set;
+}
 
 // -------------------------------------------------------------------
 //  LETTER GENERATION (weighted toward common English letters)
@@ -335,6 +161,11 @@ const COL_INVALID = 0xff3333;
 const COL_WHITE = 0xffffff;
 const EDGE_OPACITY = 0.4;
 
+const TIMER_START = 60; // seconds on the countdown clock
+const MAX_HINTS = 3;
+const MAX_TRIES = 3;
+const COL_HINT = 0xffcc33; // gold pulse for hinted cubes
+
 const ASSEMBLE_DURATION = 0.7;
 const ASSEMBLE_TOTAL = 1.5;
 
@@ -359,10 +190,14 @@ const easeOutBack = (p) => {
 const $ = (id) => document.getElementById(id);
 const elWord = $('current-word');
 const elHint = $('hint');
+const elTimer = $('timer');
 const elScore = $('score');
 const elWordsFound = $('words-found');
-const elAxis = $('axis-indicator');
 const elSubmit = $('submit-btn');
+const elHintBtn = $('hint-btn');
+const elHintDots = $('hint-dots');
+const elTriesRow = $('tries-row');
+const elTriesDots = $('tries-dots');
 const elNewGame = $('new-game-btn');
 const elOverlay = $('message-overlay');
 const elMsgTitle = $('message-title');
@@ -481,6 +316,109 @@ for (const n of NEBULAE) {
 }
 
 // -------------------------------------------------------------------
+//  SHOOTING STARS  (camera-relative streaks across the background)
+//  Parented to the camera so they always cross the current view, even
+//  as OrbitControls turns the scene.
+// -------------------------------------------------------------------
+function makeStreakTexture() {
+  const w = 256;
+  const h = 64;
+  const c = document.createElement('canvas');
+  c.width = w;
+  c.height = h;
+  const ctx = c.getContext('2d');
+  // tapered tail: transparent at the left (tail), bright at the right (head)
+  ctx.lineCap = 'round';
+  const grad = ctx.createLinearGradient(18, 0, 238, 0);
+  grad.addColorStop(0.0, 'rgba(255,255,255,0)');
+  grad.addColorStop(0.6, 'rgba(255,255,255,0.22)');
+  grad.addColorStop(1.0, 'rgba(255,255,255,1)');
+  ctx.strokeStyle = grad;
+  ctx.lineWidth = 5;
+  ctx.shadowColor = 'rgba(180,220,255,0.9)';
+  ctx.shadowBlur = 9;
+  ctx.beginPath();
+  ctx.moveTo(18, h / 2);
+  ctx.lineTo(238, h / 2);
+  ctx.stroke();
+  // glowing head
+  const hg = ctx.createRadialGradient(238, h / 2, 0, 238, h / 2, 26);
+  hg.addColorStop(0.0, 'rgba(255,255,255,1)');
+  hg.addColorStop(0.4, 'rgba(200,230,255,0.7)');
+  hg.addColorStop(1.0, 'rgba(255,255,255,0)');
+  ctx.fillStyle = hg;
+  ctx.fillRect(238 - 26, 0, 52, h);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+const STAR_TEX = makeStreakTexture();
+const shootingGroup = new THREE.Group();
+camera.add(shootingGroup);
+scene.add(camera); // camera must be in the graph for its children to render
+
+let shootingStars = [];
+let nextStarIn = 1.5 + Math.random() * 2; // first streak comes fairly soon
+
+function spawnShootingStar() {
+  const d = 70; // distance in front of the camera (behind the lattice)
+  const halfH = Math.tan(((camera.fov * Math.PI) / 180) / 2) * d;
+  const halfW = halfH * camera.aspect;
+  const A = Math.random() * Math.PI * 2; // travel direction
+  const dx = Math.cos(A);
+  const dy = Math.sin(A);
+  const maxHalf = Math.max(halfW, halfH);
+  const L = 2.6 * maxHalf; // total travel — fully crosses the view
+  const off = (Math.random() - 0.5) * 1.4 * Math.min(halfW, halfH);
+  const life = 0.3 + Math.random() * 0.2; // 0.3 - 0.5 s
+  const length = 12 + Math.random() * 10;
+  const thick = 1.2 + Math.random() * 0.8;
+
+  const mat = new THREE.SpriteMaterial({
+    map: STAR_TEX,
+    color: 0xffffff,
+    transparent: true,
+    opacity: 0,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    rotation: A, // align the streak with its travel direction
+  });
+  const sprite = new THREE.Sprite(mat);
+  sprite.scale.set(length, thick, 1);
+  // start just off the edge opposite the travel direction (+ perpendicular jitter)
+  sprite.position.set(-dx * L * 0.55 - dy * off, -dy * L * 0.55 + dx * off, -d);
+  shootingGroup.add(sprite);
+  shootingStars.push({ sprite, mat, dx, dy, speed: L / life, age: 0, life });
+}
+
+function updateShootingStars(dt) {
+  nextStarIn -= dt;
+  if (nextStarIn <= 0) {
+    spawnShootingStar();
+    nextStarIn = 3 + Math.random() * 2; // every 3 - 5 s
+  }
+  for (let i = shootingStars.length - 1; i >= 0; i--) {
+    const s = shootingStars[i];
+    s.age += dt;
+    const p = s.age / s.life;
+    if (p >= 1) {
+      shootingGroup.remove(s.sprite);
+      s.mat.dispose();
+      shootingStars.splice(i, 1);
+      continue;
+    }
+    s.sprite.position.x += s.dx * s.speed * dt;
+    s.sprite.position.y += s.dy * s.speed * dt;
+    // quick fade in, hold, then fade out so it streaks and vanishes
+    let o = 1;
+    if (p < 0.15) o = p / 0.15;
+    else if (p > 0.6) o = Math.max(0, 1 - (p - 0.6) / 0.4);
+    s.mat.opacity = o;
+  }
+}
+
+// -------------------------------------------------------------------
 //  GRID CONNECTION LINES  (faint static lattice cage)
 // -------------------------------------------------------------------
 {
@@ -551,14 +489,18 @@ const edgeGeo = new THREE.EdgesGeometry(boxGeo);
 // -------------------------------------------------------------------
 let grid = []; // grid[x][y][z] -> cube | null
 let cubes = []; // flat list of live cubes
-let selection = []; // ordered list of selected cubes
+let selection = []; // ordered list of selected cubes (click order)
 let selectionLights = [];
-let anchor = null; // first selected cube
-let lockedAxis = null; // 'x' | 'y' | 'z' | null
 
 let tweens = [];
 let interactionLocked = true; // unlocked once the grid finishes assembling
-let gameState = 'loading'; // 'loading' | 'playing' | 'won' | 'dead'
+let gameState = 'loading'; // 'loading' | 'playing' | 'won' | 'dead' | 'gameover'
+
+let timeLeft = TIMER_START; // seconds remaining on the countdown
+let timerActive = false; // starts ticking once the grid finishes assembling
+
+let hintsLeft = MAX_HINTS; // hints remaining this game
+let triesLeft = MAX_TRIES; // wrong attempts remaining this game
 
 let targetScore = 0;
 let displayedScore = 0;
@@ -793,47 +735,16 @@ function animateAssembly() {
     });
   });
   scheduleAfter(ASSEMBLE_TOTAL + 0.1, () => {
-    if (gameState === 'loading' || gameState === 'playing')
+    if (gameState === 'loading' || gameState === 'playing') {
       interactionLocked = false;
+      timerActive = true; // countdown begins once you can actually play
+    }
   });
 }
 
 // -------------------------------------------------------------------
 //  SELECTION
 // -------------------------------------------------------------------
-const coordOf = (c, axis) => (axis === 'x' ? c.gx : axis === 'y' ? c.gy : c.gz);
-
-function sharedAxis(a, b) {
-  if (a.gy === b.gy && a.gz === b.gz && a.gx !== b.gx) return 'x';
-  if (a.gx === b.gx && a.gz === b.gz && a.gy !== b.gy) return 'y';
-  if (a.gx === b.gx && a.gy === b.gy && a.gz !== b.gz) return 'z';
-  return null;
-}
-function onSameLine(a, b, axis) {
-  if (axis === 'x') return a.gy === b.gy && a.gz === b.gz;
-  if (axis === 'y') return a.gx === b.gx && a.gz === b.gz;
-  return a.gx === b.gx && a.gy === b.gy;
-}
-
-// all contiguous cubes from anchor toward end along axis (stops at a gap)
-function buildLine(start, end, axis) {
-  const res = [];
-  const a0 = coordOf(start, axis);
-  const a1 = coordOf(end, axis);
-  const step = a1 >= a0 ? 1 : -1;
-  for (let v = a0; ; v += step) {
-    let x = start.gx, y = start.gy, z = start.gz;
-    if (axis === 'x') x = v;
-    else if (axis === 'y') y = v;
-    else z = v;
-    const cube = grid[x] && grid[x][y] ? grid[x][y][z] : null;
-    if (!cube) break;
-    res.push(cube);
-    if (v === a1) break;
-  }
-  return res;
-}
-
 function setSelection(arr) {
   for (const c of selection) c.selected = false;
   selection = arr;
@@ -852,47 +763,19 @@ function setSelection(arr) {
 
 function clearSelection() {
   setSelection([]);
-  anchor = null;
-  lockedAxis = null;
   updateWordHUD();
-  updateAxisHUD();
 }
 
+// Free, anagram-style selection: click any cube to add it (in click
+// order); click an already-selected cube to remove it. No axis/line rules.
 function onCubeClick(cube) {
   playClick();
-  if (!anchor) {
-    anchor = cube;
-    lockedAxis = null;
-    setSelection([cube]);
-  } else if (!lockedAxis) {
-    if (cube === anchor) {
-      clearSelection();
-      return;
-    }
-    const ax = sharedAxis(anchor, cube);
-    if (ax) {
-      lockedAxis = ax;
-      setSelection(buildLine(anchor, cube, ax));
-    } else {
-      // not aligned — start fresh from the new cube
-      anchor = cube;
-      lockedAxis = null;
-      setSelection([cube]);
-    }
+  if (cube.selected) {
+    setSelection(selection.filter((c) => c !== cube));
   } else {
-    if (cube === anchor) {
-      lockedAxis = null;
-      setSelection([anchor]);
-    } else if (onSameLine(anchor, cube, lockedAxis)) {
-      setSelection(buildLine(anchor, cube, lockedAxis));
-    } else {
-      anchor = cube;
-      lockedAxis = null;
-      setSelection([cube]);
-    }
+    setSelection([...selection, cube]);
   }
   updateWordHUD();
-  updateAxisHUD();
 }
 
 // -------------------------------------------------------------------
@@ -903,10 +786,34 @@ function currentLetters() {
 }
 function isValidSelection() {
   if (selection.length < 3) return false;
-  const letters = currentLetters();
-  const fwd = letters.join('');
-  const bwd = letters.slice().reverse().join('');
-  return WORDS.has(fwd) || WORDS.has(bwd);
+  return WORDS.has(currentLetters().join(''));
+}
+
+// Can ANY word in the list still be spelled from the letters left on the
+// board? Anagram/subset check — replaces the old line-based scan now that
+// selection is free-form (any cubes, any order).
+function anyWordFormable() {
+  if (cubes.length < 3) return false;
+  const avail = {};
+  for (const c of cubes) {
+    const l = c.letter.toLowerCase();
+    avail[l] = (avail[l] || 0) + 1;
+  }
+  for (const word of WORDS) {
+    if (word.length > cubes.length) continue;
+    const need = {};
+    let ok = true;
+    for (let i = 0; i < word.length; i++) {
+      const ch = word[i];
+      need[ch] = (need[ch] || 0) + 1;
+      if (need[ch] > (avail[ch] || 0)) {
+        ok = false;
+        break;
+      }
+    }
+    if (ok) return true;
+  }
+  return false;
 }
 
 function submit() {
@@ -916,12 +823,10 @@ function submit() {
     playInvalid();
     return;
   }
-  const letters = currentLetters();
-  const fwd = letters.join('');
-  const bwd = letters.slice().reverse().join('');
+  const word = currentLetters().join('');
   const list = selection.slice();
-  if (WORDS.has(fwd) || WORDS.has(bwd)) {
-    onValid(WORDS.has(fwd) ? fwd : bwd, list);
+  if (WORDS.has(word)) {
+    onValid(word, list);
   } else {
     onInvalid(list);
   }
@@ -934,10 +839,7 @@ function onValid(word, list) {
   addFoundWord(word, pts);
 
   setSelection([]);
-  anchor = null;
-  lockedAxis = null;
   updateWordHUD();
-  updateAxisHUD();
 
   playValid(word.length);
 
@@ -962,24 +864,74 @@ function onInvalid(list) {
   interactionLocked = true;
   playInvalid();
   setSelection([]);
-  anchor = null;
-  lockedAxis = null;
   updateWordHUD();
-  updateAxisHUD();
+  triesLeft -= 1;
+  updateTriesHUD();
   flashCubes(list, COL_INVALID, 0.3, () => {
-    interactionLocked = false;
+    if (triesLeft <= 0) gameOver(); // out of wrong tries -> game over
+    else interactionLocked = false;
   });
 }
 
 function afterResolve() {
+  if (gameState !== 'playing') return; // e.g. the clock ran out mid-resolve
   clearSelection();
   if (cubes.length === 0) {
     winGame();
     return;
   }
   interactionLocked = false;
-  const remaining = scanGrid((x, y, z) => grid[x][y][z]);
-  if (remaining.length === 0) noMoreWords();
+  if (!anyWordFormable()) noMoreWords();
+}
+
+// -------------------------------------------------------------------
+//  HINTS
+// -------------------------------------------------------------------
+// Find a valid word spellable from the cubes on the board (prefer a
+// longer one for a more useful hint) and return the cubes that spell it.
+function findHintWord() {
+  const byLetter = {};
+  for (const c of cubes) {
+    const l = c.letter.toLowerCase();
+    (byLetter[l] = byLetter[l] || []).push(c);
+  }
+  const avail = {};
+  for (const l in byLetter) avail[l] = byLetter[l].length;
+
+  let best = null;
+  for (const word of WORDS) {
+    if (word.length < 3 || word.length > cubes.length) continue;
+    if (best && word.length <= best.length) continue; // only seek longer ones
+    const need = {};
+    let ok = true;
+    for (let i = 0; i < word.length; i++) {
+      const ch = word[i];
+      need[ch] = (need[ch] || 0) + 1;
+      if (need[ch] > (avail[ch] || 0)) { ok = false; break; }
+    }
+    if (ok) {
+      best = word;
+      if (best.length >= 6) break; // long enough — stop searching
+    }
+  }
+  if (!best) return null;
+
+  const pools = {};
+  for (const l in byLetter) pools[l] = byLetter[l].slice();
+  const chosen = [];
+  for (const ch of best) chosen.push(pools[ch].pop());
+  return chosen;
+}
+
+function useHint() {
+  if (gameState !== 'playing' || interactionLocked || hintsLeft <= 0) return;
+  const chosen = findHintWord();
+  if (!chosen) return; // nothing formable (shouldn't happen mid-game)
+  hintsLeft -= 1;
+  updateHintHUD();
+  const until = now + 3; // pulse gold for 3 seconds
+  for (const c of chosen) c.hintUntil = until;
+  playHint();
 }
 
 // -------------------------------------------------------------------
@@ -1092,8 +1044,10 @@ function applyGravity() {
 //  WIN / DEAD STATES
 // -------------------------------------------------------------------
 function winGame() {
+  if (gameState !== 'playing') return;
   gameState = 'won';
   interactionLocked = true;
+  timerActive = false;
   playWin();
   // remaining starfield accelerates outward
   const s0 = starGroup.scale.x;
@@ -1108,8 +1062,10 @@ function winGame() {
 }
 
 function noMoreWords() {
+  if (gameState !== 'playing') return;
   gameState = 'dead';
   interactionLocked = true;
+  timerActive = false;
   showMessage(
     'NO MORE WORDS',
     `${cubes.length} CUBES REMAIN · SCORE ${targetScore}`,
@@ -1126,8 +1082,6 @@ function newGame() {
   clearGridObjects();
   grid = [];
   selection = [];
-  anchor = null;
-  lockedAxis = null;
 
   starGroup.scale.setScalar(1);
   targetScore = 0;
@@ -1135,10 +1089,18 @@ function newGame() {
   foundCount = 0;
   renderFoundReset();
 
+  timeLeft = TIMER_START;
+  timerActive = false; // re-enabled when the new grid finishes assembling
+  updateTimerHUD();
+
+  hintsLeft = MAX_HINTS;
+  triesLeft = MAX_TRIES;
+  updateHintHUD();
+  updateTriesHUD();
+
   gameState = 'playing';
   buildGrid();
   updateWordHUD();
-  updateAxisHUD();
 }
 
 // -------------------------------------------------------------------
@@ -1161,18 +1123,44 @@ function shakeWord() {
   elWord.classList.add('shake');
 }
 
-function updateAxisHUD() {
-  if (!lockedAxis || selection.length < 2) {
-    elAxis.innerHTML = 'AXIS <b>—</b>';
-    return;
-  }
-  const last = selection[selection.length - 1];
-  const dir = coordOf(last, lockedAxis) - coordOf(anchor, lockedAxis);
-  let arrow = '';
-  if (lockedAxis === 'x') arrow = dir >= 0 ? '→' : '←';
-  else if (lockedAxis === 'y') arrow = dir >= 0 ? '↑' : '↓';
-  else arrow = dir >= 0 ? '⊙' : '⊗'; // z: toward / away
-  elAxis.innerHTML = `AXIS <b>${lockedAxis.toUpperCase()} ${arrow}</b>`;
+function updateTimerHUD() {
+  elTimer.textContent = Math.ceil(timeLeft);
+  elTimer.classList.toggle('low', timeLeft <= 30); // red + pulse at 30s
+}
+
+function updateHintHUD() {
+  elHintDots.textContent =
+    '●'.repeat(hintsLeft) + '○'.repeat(MAX_HINTS - hintsLeft);
+  elHintBtn.disabled = hintsLeft <= 0; // grays out after 3 used
+}
+
+function updateTriesHUD() {
+  elTriesDots.textContent =
+    '●'.repeat(triesLeft) + '○'.repeat(MAX_TRIES - triesLeft);
+  elTriesRow.classList.toggle('danger', triesLeft <= 1);
+}
+
+function gameOver() {
+  if (gameState !== 'playing') return;
+  gameState = 'gameover';
+  timerActive = false;
+  interactionLocked = true;
+  setSelection([]);
+  updateWordHUD();
+  elHintBtn.disabled = true;
+  playGameOver();
+  showMessage(
+    'GAME OVER',
+    `SCORE ${targetScore} · ${foundCount} WORDS FOUND`,
+    'Play Again'
+  );
+}
+
+function timeUp() {
+  if (gameState !== 'playing') return;
+  timeLeft = 0;
+  updateTimerHUD();
+  gameOver();
 }
 
 function addFoundWord(word, pts) {
@@ -1253,6 +1241,16 @@ function playWin() {
   const notes = [330, 415, 494, 659, 784];
   notes.forEach((f, i) => tone(f, 0.5, 'triangle', 0.12, i * 0.12));
 }
+function playGameOver() {
+  ensureAudio();
+  const notes = [392, 311, 233, 175]; // descending, somber
+  notes.forEach((f, i) => tone(f, 0.45, 'sine', 0.13, i * 0.13));
+}
+function playHint() {
+  ensureAudio();
+  tone(880, 0.12, 'sine', 0.07);
+  tone(1320, 0.16, 'sine', 0.05, 0.06);
+}
 
 // -------------------------------------------------------------------
 //  INTERACTION (raycasting + idle auto-rotate)
@@ -1306,9 +1304,18 @@ window.addEventListener('keydown', (e) => {
   }
 });
 
-elSubmit.addEventListener('click', submit);
-elNewGame.addEventListener('click', newGame);
-elMsgBtn.addEventListener('click', newGame);
+// Blur after click so a lingering button focus can't be re-fired by the
+// Enter key (that was the cause of stray New Game restarts during play).
+function bindButton(el, fn) {
+  el.addEventListener('click', () => {
+    el.blur();
+    fn();
+  });
+}
+bindButton(elSubmit, submit);
+bindButton(elHintBtn, useHint);
+bindButton(elNewGame, newGame);
+bindButton(elMsgBtn, newGame);
 
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
@@ -1335,6 +1342,17 @@ function styleCubes() {
       c.bloomMat.opacity = 0.12 + 0.08 * pulse;
       c.mat.color.setHex(COL_WHITE);
       c.mat.opacity = 1;
+    } else if (c.hintUntil && now < c.hintUntil) {
+      // gold hint pulse
+      const pulse = 0.5 + 0.5 * Math.sin(now * 6);
+      c.group.scale.setScalar(1.1 + 0.06 * Math.sin(now * 6));
+      c.edgeMat.color.setHex(COL_HINT);
+      c.edgeMat.opacity = 0.7 + 0.3 * pulse;
+      c.bloom.visible = true;
+      c.bloomMat.color.setHex(COL_HINT);
+      c.bloomMat.opacity = 0.16 + 0.12 * pulse;
+      c.mat.color.setHex(COL_WHITE);
+      c.mat.opacity = 1;
     } else {
       const sc = c.group.scale;
       sc.x += (1 - sc.x) * k;
@@ -1357,6 +1375,7 @@ function animate() {
   requestAnimationFrame(animate);
   const t = performance.now() / 1000;
   now = t;
+  const dt = Math.min(0.05, Math.max(0, now - prevT)); // clamped frame delta
 
   updateTweens();
 
@@ -1367,8 +1386,21 @@ function animate() {
   styleCubes();
   prevFrameForStyle = now;
 
+  // countdown clock
+  if (gameState === 'playing' && timerActive) {
+    timeLeft -= dt;
+    if (timeLeft <= 0) {
+      timeLeft = 0;
+      timeUp();
+    }
+  }
+  updateTimerHUD();
+
+  // ambient shooting stars
+  updateShootingStars(dt);
+
   // animated score tick-up
-  displayedScore += (targetScore - displayedScore) * Math.min(1, (now - prevT) * 8);
+  displayedScore += (targetScore - displayedScore) * Math.min(1, dt * 8);
   if (Math.abs(targetScore - displayedScore) < 0.5) displayedScore = targetScore;
   elScore.textContent = Math.round(displayedScore);
 
@@ -1389,10 +1421,16 @@ function init() {
   prevT = now;
   prevFrameForStyle = now;
   lastInteract = now;
+  timeLeft = TIMER_START;
+  timerActive = false;
+  updateTimerHUD();
+  hintsLeft = MAX_HINTS;
+  triesLeft = MAX_TRIES;
+  updateHintHUD();
+  updateTriesHUD();
   gameState = 'playing';
   buildGrid();
   updateWordHUD();
-  updateAxisHUD();
   animate();
   // fade out the loading splash
   setTimeout(() => elLoading.classList.add('hidden'), 300);
@@ -1401,4 +1439,16 @@ function init() {
   }, 1000);
 }
 
-init();
+// Fetch the dictionary first (showing the loading splash), then start.
+async function boot() {
+  elLoading.textContent = 'LOADING DICTIONARY';
+  try {
+    WORDS = await loadDictionary();
+  } catch (e) {
+    console.warn('Dictionary fetch failed — using built-in fallback list.', e);
+    WORDS = new Set(FALLBACK_WORDS);
+    elLoading.textContent = 'OFFLINE · BASIC WORD LIST';
+  }
+  init();
+}
+boot();
