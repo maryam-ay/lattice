@@ -207,7 +207,6 @@ const elHintBtn = $('hint-btn');
 const elHintDots = $('hint-dots');
 const elTriesRow = $('tries-row');
 const elTriesDots = $('tries-dots');
-const elNewGame = $('new-game-btn');
 const elOverlay = $('message-overlay');
 const elMsgTitle = $('message-title');
 const elMsgSub = $('message-sub');
@@ -1410,12 +1409,9 @@ inputLayer.addEventListener('pointerup', (e) => {
   if (moved < TAP_THRESHOLD) selectCube(e);
 });
 
-// ---- 2. RESTART BUTTONS (the only event paths that call newGame) ----
-elNewGame.addEventListener('click', (e) => {
-  e.stopPropagation();
-  e.preventDefault();
-  newGame();
-});
+// ---- 2. RESTART (the only event path that calls newGame) ----
+// Play Again on the end-of-game overlay is the sole restart trigger now that
+// the in-HUD New Game button has been removed.
 elMsgBtn.addEventListener('click', (e) => {
   e.stopPropagation();
   e.preventDefault();
