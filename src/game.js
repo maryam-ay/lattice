@@ -545,6 +545,10 @@ let hoveredCube = null; // cube under the cursor — soft pre-selection glow
 let tweens = [];
 let interactionLocked = true; // unlocked once the grid finishes assembling
 let gameState = 'loading'; // 'loading' | 'playing' | 'won' | 'dead' | 'gameover'
+// Restart guard: true while a game is running, false before the first game
+// and after any game ends. newGame() bails out unless this is false, so a
+// stray call during play (e.g. a misfired tap) can never restart the game.
+let isGameActive = false;
 
 let timeLeft = TIMER_START; // seconds remaining on the countdown
 let timerActive = false; // starts ticking once the grid finishes assembling
@@ -1109,6 +1113,7 @@ function applyGravity() {
 function winGame() {
   if (gameState !== 'playing') return;
   gameState = 'won';
+  isGameActive = false; // ended -> a restart is now allowed
   interactionLocked = true;
   timerActive = false;
   playWin();
@@ -1132,6 +1137,7 @@ function winGame() {
 function noMoreWords() {
   if (gameState !== 'playing') return;
   gameState = 'dead';
+  isGameActive = false; // ended -> a restart is now allowed
   interactionLocked = true;
   timerActive = false;
   showMessage(
@@ -1145,6 +1151,11 @@ function noMoreWords() {
 //  NEW GAME
 // -------------------------------------------------------------------
 function newGame() {
+  // HARD GUARD: while a game is running this is true, so any stray call is
+  // completely ignored. A restart is only possible from an ended state
+  // (isGameActive === false), reachable solely via New Game / Play Again.
+  if (isGameActive) return;
+
   // Swallow the originating event so a restart can never bubble or fire a
   // default action. newGame is only ever called from the two button click
   // handlers below — nothing else in the codebase invokes it.
@@ -1176,6 +1187,8 @@ function newGame() {
   gameState = 'playing';
   buildGrid();
   updateWordHUD();
+  // Fully initialized and running — block any further restart until it ends.
+  isGameActive = true;
 }
 
 // -------------------------------------------------------------------
@@ -1218,6 +1231,7 @@ function updateTriesHUD() {
 function gameOver() {
   if (gameState !== 'playing') return;
   gameState = 'gameover';
+  isGameActive = false; // ended -> a restart is now allowed
   timerActive = false;
   interactionLocked = true;
   setSelection([]);
@@ -1610,6 +1624,7 @@ function init() {
   buildGrid();
   updateWordHUD();
   fitCameraToGrid(); // frame the grid for the current screen size
+  isGameActive = true; // first game is now running
   animate();
   // fade out the loading splash
   setTimeout(() => elLoading.classList.add('hidden'), 300);
