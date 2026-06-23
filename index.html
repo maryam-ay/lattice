@@ -200,7 +200,7 @@
         80% { transform: translateX(6px); }
       }
 
-      /* --- bottom-left cluster: hint button + instruction --- */
+      /* --- bottom-left cluster: new game + hint button + instruction --- */
       #bottom-left {
         position: absolute;
         bottom: 30px;
@@ -210,6 +210,19 @@
         align-items: flex-start;
         gap: 10px;
         max-width: 62vw;
+      }
+      /* Small, muted mid-game reset. Deliberately subtle and tucked in the
+         corner so it isn't hit by accident, but available any time. */
+      #reset-btn {
+        font-size: 11px !important;
+        letter-spacing: 0.3em !important;
+        color: rgba(150, 205, 245, 0.6);
+        cursor: pointer;
+        padding: 6px 8px;
+      }
+      #reset-btn:hover {
+        color: #ffffff;
+        text-shadow: 0 0 14px var(--cyan), 0 0 26px var(--blue);
       }
       #hint {
         font-size: 12px;
@@ -612,6 +625,7 @@
       </div>
 
       <div id="bottom-left">
+        <button id="reset-btn" type="button">NEW GAME</button>
         <div id="hint-row">
           <button id="hint-btn" type="button">HINT</button>
           <span id="hint-dots">●●●</span>

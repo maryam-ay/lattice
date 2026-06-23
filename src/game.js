@@ -207,6 +207,7 @@ const elHintBtn = $('hint-btn');
 const elHintDots = $('hint-dots');
 const elTriesRow = $('tries-row');
 const elTriesDots = $('tries-dots');
+const elReset = $('reset-btn');
 const elOverlay = $('message-overlay');
 const elMsgTitle = $('message-title');
 const elMsgSub = $('message-sub');
@@ -1409,12 +1410,21 @@ inputLayer.addEventListener('pointerup', (e) => {
   if (moved < TAP_THRESHOLD) selectCube(e);
 });
 
-// ---- 2. RESTART (the only event path that calls newGame) ----
-// Play Again on the end-of-game overlay is the sole restart trigger now that
-// the in-HUD New Game button has been removed.
+// ---- 2. RESTART (the only event paths that call newGame) ----
+// Play Again on the end-of-game overlay.
 elMsgBtn.addEventListener('click', (e) => {
   e.stopPropagation();
   e.preventDefault();
+  newGame();
+});
+// In-HUD New Game button — an EXPLICIT mid-game reset. It clears isGameActive
+// first so it can bypass the restart guard (the guard still blocks every
+// other, accidental call). This is the only sanctioned way to restart while a
+// game is still running.
+elReset.addEventListener('click', (e) => {
+  e.stopPropagation();
+  e.preventDefault();
+  isGameActive = false;
   newGame();
 });
 
