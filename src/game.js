@@ -165,7 +165,7 @@ const COL_HOVER_EDGE = 0x66ddff; // brighter than rest edge, softer than select
 const COL_HOVER_FACE = 0xcdeeff; // faint cyan tint on the face while hovering
 const EDGE_OPACITY = 0.4;
 
-const TIMER_START = 90; // seconds on the countdown clock
+const TIMER_START = 60; // seconds on the countdown clock
 const MAX_HINTS = 3;
 const MAX_TRIES = 3;
 const COL_HINT = 0xffcc33; // gold pulse for hinted cubes
@@ -226,6 +226,10 @@ const renderer = new THREE.WebGLRenderer({
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setClearColor(0x000000, 1);
+
+// The canvas must never show a hand/pointer cursor — only the New Game and
+// Play Again buttons do. Nothing in this file ever sets it to anything else.
+canvas.style.cursor = 'default';
 
 const scene = new THREE.Scene();
 
@@ -1417,6 +1421,7 @@ window.addEventListener('keydown', (e) => {
 function bindButton(el, fn) {
   el.addEventListener('click', (e) => {
     e.stopPropagation();
+    e.preventDefault();
     el.blur();
     fn();
   });

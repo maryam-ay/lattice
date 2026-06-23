@@ -72,7 +72,9 @@
         color: var(--ink);
         letter-spacing: 0.25em;
         font-size: 13px;
-        cursor: pointer;
+        /* No hand cursor by default — only the New Game / Play Again buttons
+           get a pointer cursor (see #new-game-btn and #message-btn). */
+        cursor: default;
         text-transform: uppercase;
         transition: color 0.2s ease, text-shadow 0.2s ease, transform 0.12s ease;
         padding: 8px 10px;
@@ -90,7 +92,7 @@
         text-shadow: none;
       }
 
-      /* --- top center: the 90s countdown clock --- */
+      /* --- top center: the 60s countdown clock --- */
       #timer {
         position: absolute;
         top: 16px;
@@ -317,13 +319,14 @@
         text-shadow: 0 0 14px rgba(255, 60, 60, 0.7);
       }
 
-      /* --- bottom right: new game --- */
+      /* --- bottom right: new game (one of the two reset buttons) --- */
       #new-game-btn {
         position: absolute;
         bottom: 34px;
         right: 32px;
         font-size: 12px !important;
         color: rgba(150, 205, 245, 0.7);
+        cursor: pointer; /* allowed: this is an explicit reset button */
       }
 
       /* --- centered message overlay (win / dead) --- */
@@ -433,7 +436,7 @@
         <div id="score">0</div>
       </div>
 
-      <div id="timer">90</div>
+      <div id="timer">60</div>
 
       <div id="word-top">
         <div id="current-word"></div>
