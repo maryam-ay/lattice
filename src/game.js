@@ -1370,9 +1370,19 @@ inputLayer.addEventListener('pointerdown', (e) => {
   pointerMoved = 0;
 });
 inputLayer.addEventListener('pointermove', (e) => {
-  // Track movement delta only.
-  if (!pointerStart) return;
-  pointerMoved = Math.hypot(e.clientX - pointerStart.x, e.clientY - pointerStart.y);
+  // Track movement delta (for the tap-vs-drag test) while a pointer is down.
+  if (pointerStart) {
+    pointerMoved = Math.hypot(e.clientX - pointerStart.x, e.clientY - pointerStart.y);
+  }
+  // Hover pre-selection glow: highlight the cube under the cursor (desktop).
+  if (interactionLocked || gameState !== 'playing') {
+    hoveredCube = null;
+    return;
+  }
+  hoveredCube = raycastCube(e.clientX, e.clientY);
+});
+inputLayer.addEventListener('pointerleave', () => {
+  hoveredCube = null;
 });
 inputLayer.addEventListener('pointerup', (e) => {
   if (!pointerStart || e.pointerId !== pointerStart.id) {
