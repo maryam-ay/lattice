@@ -252,18 +252,50 @@ controls.autoRotate = false;
 controls.autoRotateSpeed = 0.4;
 controls.enablePan = false;
 
-// Rotation gestures: a left click / left drag must NEVER orbit — it is
-// reserved purely for cube selection so tapping a cube can't spin the grid.
-// Orbiting happens only via the middle mouse button or a two-finger trackpad
-// swipe (handled as a wheel event further down).
+// Rotation gestures (DESKTOP): left-click drag orbits, and a two-finger
+// trackpad swipe orbits (handled as a wheel event further down). A tap that
+// barely moves is still treated as a cube selection (see the 5px test in the
+// pointerup handler), so clicking a cube doesn't spin the grid.
 controls.mouseButtons = {
-  LEFT: null,
+  LEFT: THREE.MOUSE.ROTATE,
   MIDDLE: THREE.MOUSE.ROTATE,
   RIGHT: null,
+};
+// Rotation gestures (MOBILE): one finger is reserved for tap-to-select, two
+// fingers rotate the grid. DOLLY_ROTATE is the two-finger mode; with
+// enableZoom off (below) OrbitControls runs only its rotate half, so a
+// two-finger swipe orbits and no accidental dolly fights our framing.
+controls.touches = {
+  ONE: null,
+  TWO: THREE.TOUCH.DOLLY_ROTATE,
 };
 // We drive zoom + two-finger-swipe rotation ourselves from the wheel event,
 // so disable OrbitControls' built-in wheel dolly.
 controls.enableZoom = false;
+
+// Bounding-sphere radius of the whole lattice (corner of the outermost cube).
+const GRID_HALF_EXTENT =
+  axisOffset(Math.max(SIZE_X, SIZE_Y, SIZE_Z)) + CUBE_SIZE / 2;
+const GRID_RADIUS = GRID_HALF_EXTENT * Math.SQRT2 * 1.18; // a little headroom
+
+// Pull the camera back far enough that the grid fits the viewport on ANY
+// aspect ratio (portrait phones are horizontally constrained). Only ever
+// pushes outward — never closer — and preserves the current view angle so it
+// doesn't disturb rotation. Called at boot and on every resize.
+function fitCameraToGrid() {
+  const vFov = (camera.fov * Math.PI) / 180;
+  const distV = GRID_RADIUS / Math.sin(vFov / 2);
+  const hFov = 2 * Math.atan(Math.tan(vFov / 2) * camera.aspect);
+  const distH = GRID_RADIUS / Math.sin(hFov / 2);
+  const need = Math.max(distV, distH);
+  controls.maxDistance = Math.max(24, need * 1.25);
+  const dir = camera.position.clone().sub(controls.target);
+  if (dir.length() < need) {
+    dir.setLength(need);
+    camera.position.copy(controls.target).add(dir);
+  }
+  controls.update();
+}
 
 // A touch of ambient light (mostly for any standard-material extras /
 // the selection point lights to have something to bite into).
@@ -1315,10 +1347,21 @@ function raycastCube(clientX, clientY) {
   return hits.length ? hits[0].object.userData.cube : null;
 }
 
+// Active pointers — so a two-finger touch gesture (rotate) is never mistaken
+// for a one-finger tap (select) on mobile.
+const activePointers = new Set();
+let multiTouchGesture = false;
+
 renderer.domElement.addEventListener('pointerdown', (e) => {
   ensureAudio();
   resetIdle();
+  activePointers.add(e.pointerId);
+  if (activePointers.size > 1) multiTouchGesture = true;
   pointerDown = { x: e.clientX, y: e.clientY };
+});
+renderer.domElement.addEventListener('pointercancel', (e) => {
+  activePointers.delete(e.pointerId);
+  if (activePointers.size === 0) multiTouchGesture = false;
 });
 // Track which cube the cursor is over so styleCubes() can give it a soft
 // pre-selection glow. No game state changes here — purely visual.
@@ -1334,12 +1377,17 @@ renderer.domElement.addEventListener('pointerleave', () => {
 });
 renderer.domElement.addEventListener('pointerup', (e) => {
   resetIdle();
+  const wasMultiTouch = multiTouchGesture;
+  activePointers.delete(e.pointerId);
+  if (activePointers.size === 0) multiTouchGesture = false;
   if (!pointerDown) return;
   const dx = e.clientX - pointerDown.x;
   const dy = e.clientY - pointerDown.y;
   pointerDown = null;
+  // A two-finger gesture (rotate) is never a cube selection.
+  if (wasMultiTouch) return;
   // Moved more than 5px between down and up -> treat as a rotate/orbit
-  // gesture (e.g. trackpad two-finger swipe), never a cube selection.
+  // gesture (e.g. trackpad two-finger swipe or a drag), never a selection.
   if (Math.hypot(dx, dy) > 5) return;
   if (interactionLocked || gameState !== 'playing') return;
   const cube = raycastCube(e.clientX, e.clientY);
@@ -1434,11 +1482,14 @@ bindButton(elHintBtn, useHint);
 bindButton(elNewGame, newGame);
 bindButton(elMsgBtn, newGame);
 
-window.addEventListener('resize', () => {
+function handleResize() {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
-});
+  fitCameraToGrid(); // keep the grid framed on phones / after rotation
+}
+window.addEventListener('resize', handleResize);
+window.addEventListener('orientationchange', handleResize);
 
 // -------------------------------------------------------------------
 //  PER-FRAME CUBE STYLING (selection pulse + return to rest)
@@ -1563,6 +1614,7 @@ function init() {
   gameState = 'playing';
   buildGrid();
   updateWordHUD();
+  fitCameraToGrid(); // frame the grid for the current screen size
   animate();
   // fade out the loading splash
   setTimeout(() => elLoading.classList.add('hidden'), 300);

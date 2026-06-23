@@ -2,7 +2,10 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
     <title>LATTICE</title>
     <style>
       :root {
@@ -37,8 +40,14 @@
       canvas#scene {
         position: fixed;
         inset: 0;
+        width: 100%;
+        height: 100%;
         z-index: 0;
         display: block;
+        /* The 3D canvas must never show a hand cursor — only the explicit
+           reset buttons do. !important guards against anything overriding it. */
+        cursor: default !important;
+        touch-action: none; /* let us own touch gestures (pan/zoom/rotate) */
       }
 
       /* --- subtle vignette to darken the edges of the frame --- */
@@ -350,7 +359,8 @@
       }
       #message-overlay.show {
         opacity: 1;
-        pointer-events: auto;
+        /* Overlay itself stays click-through; only the Play Again button
+           (#message-btn, pointer-events: auto) catches clicks. */
       }
       #message-title {
         font-size: clamp(34px, 8vw, 92px);
@@ -419,6 +429,140 @@
       #loading.hidden {
         opacity: 0;
         pointer-events: none;
+      }
+
+      /* =====================  MOBILE / SMALL SCREENS  ===================== */
+      /* Narrow (portrait phone) screens: shrink fonts, tuck the HUD into the
+         corners with safe-area padding, and stack the bottom controls so
+         nothing overlaps. The canvas itself always fills the viewport. */
+      @media (max-width: 640px) {
+        #words-found {
+          top: calc(8px + env(safe-area-inset-top));
+          left: calc(10px + env(safe-area-inset-left));
+          max-width: 44vw;
+          gap: 3px;
+        }
+        #wf-label {
+          font-size: 9px;
+          letter-spacing: 0.22em;
+        }
+        .found-item {
+          font-size: 12px;
+          letter-spacing: 0.08em;
+        }
+        .found-item .pts {
+          font-size: 10px;
+          margin-left: 5px;
+        }
+
+        #score-wrap {
+          top: calc(8px + env(safe-area-inset-top));
+          right: calc(10px + env(safe-area-inset-right));
+        }
+        #score-label {
+          font-size: 9px;
+          letter-spacing: 0.22em;
+        }
+        #score {
+          font-size: clamp(20px, 7vw, 30px);
+        }
+
+        #timer {
+          top: calc(6px + env(safe-area-inset-top));
+          font-size: clamp(26px, 9vw, 40px);
+        }
+
+        #word-top {
+          top: calc(52px + env(safe-area-inset-top));
+          max-width: 96vw;
+        }
+        #current-word {
+          font-size: clamp(20px, 6.5vw, 34px);
+          letter-spacing: 0.16em;
+          padding-left: 0.16em;
+        }
+
+        /* The "click cubes" instruction is desktop-only chrome — hide it on
+           phones so the HINT control stays compact in the corner. */
+        #hint {
+          display: none;
+        }
+        #bottom-left {
+          bottom: calc(12px + env(safe-area-inset-bottom));
+          left: calc(10px + env(safe-area-inset-left));
+          gap: 6px;
+          max-width: 34vw;
+        }
+        #hint-btn {
+          font-size: 12px !important;
+          letter-spacing: 0.18em !important;
+          padding: 6px 4px;
+        }
+        #hint-dots {
+          font-size: 13px;
+        }
+
+        #bottom-center {
+          bottom: calc(12px + env(safe-area-inset-bottom));
+          gap: 6px;
+        }
+        #submit-btn {
+          font-size: 14px !important;
+          letter-spacing: 0.3em !important;
+          padding: 8px 12px;
+        }
+        #tries-row {
+          font-size: 10px;
+          letter-spacing: 0.18em;
+        }
+        #tries-dots {
+          font-size: 12px;
+        }
+
+        #new-game-btn {
+          bottom: calc(12px + env(safe-area-inset-bottom));
+          right: calc(10px + env(safe-area-inset-right));
+          font-size: 10px !important;
+        }
+
+        #message-title {
+          font-size: clamp(28px, 11vw, 60px);
+          letter-spacing: 0.16em;
+          padding-left: 0.16em;
+        }
+        #message-sub {
+          font-size: 12px;
+          letter-spacing: 0.16em;
+          padding: 0 16px;
+        }
+        #message-btn {
+          font-size: 15px;
+          letter-spacing: 0.3em;
+        }
+      }
+
+      /* Short screens (landscape phones): pull the top/bottom clusters in and
+         keep the timer/word from eating the middle of the board. */
+      @media (max-height: 500px) {
+        #timer {
+          font-size: clamp(22px, 7vh, 34px);
+          top: calc(4px + env(safe-area-inset-top));
+        }
+        #word-top {
+          top: calc(40px + env(safe-area-inset-top));
+        }
+        #current-word {
+          font-size: clamp(18px, 6vh, 30px);
+        }
+        #words-found,
+        #score-wrap {
+          top: calc(6px + env(safe-area-inset-top));
+        }
+        #bottom-left,
+        #bottom-center,
+        #new-game-btn {
+          bottom: calc(8px + env(safe-area-inset-bottom));
+        }
       }
     </style>
   </head>
