@@ -1,6 +1,6 @@
 // ===================================================================
 //  LATTICE — a 3D word puzzle adrift in deep space
-//  Plain JS + Three.js.  Find words along the rows of a 3x3x2 grid of
+//  Plain JS + Three.js.  Find words along the rows of a 3x3x3 grid of
 //  glowing letter cubes; clear them, let gravity collapse the lattice,
 //  and try to dissolve the whole structure.
 // ===================================================================
@@ -149,10 +149,10 @@ function randomLetter() {
 // -------------------------------------------------------------------
 //  CONSTANTS
 // -------------------------------------------------------------------
-// Grid dimensions: 3 wide (x), 3 tall (y), 2 deep (z) = 18 cubes.
+// Grid dimensions: 3 wide (x), 3 tall (y), 3 deep (z) = 27 cubes.
 const SIZE_X = 3;
 const SIZE_Y = 3;
-const SIZE_Z = 2;
+const SIZE_Z = 3;
 const SPACING = 2.2;
 const CUBE_SIZE = 1.5;
 
@@ -233,17 +233,30 @@ const camera = new THREE.PerspectiveCamera(
   0.1,
   3000
 );
-camera.position.set(4.5, 3.5, 8.5);
+camera.position.set(5.5, 4.5, 9.5);
 
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.target.set(0, 0, 0);
 controls.enableDamping = true;
 controls.dampingFactor = 0.08;
-controls.minDistance = 5;
-controls.maxDistance = 22;
+controls.minDistance = 6;
+controls.maxDistance = 24;
 controls.autoRotate = false;
 controls.autoRotateSpeed = 0.4;
 controls.enablePan = false;
+
+// Rotation gestures: a left click / left drag must NEVER orbit — it is
+// reserved purely for cube selection so tapping a cube can't spin the grid.
+// Orbiting happens only via the middle mouse button or a two-finger trackpad
+// swipe (handled as a wheel event further down).
+controls.mouseButtons = {
+  LEFT: null,
+  MIDDLE: THREE.MOUSE.ROTATE,
+  RIGHT: null,
+};
+// We drive zoom + two-finger-swipe rotation ourselves from the wheel event,
+// so disable OrbitControls' built-in wheel dolly.
+controls.enableZoom = false;
 
 // A touch of ambient light (mostly for any standard-material extras /
 // the selection point lights to have something to bite into).
@@ -655,10 +668,10 @@ function scanGrid(getCell) {
 //  SEEDING  (guarantee >= 12 words; up to 50 attempts)
 // -------------------------------------------------------------------
 function seedLetters() {
-  // Target a handful of line-words. The 18-cube grid has at most ~12 word-
-  // capable lines, so this is intentionally modest; free-form (anagram)
-  // selection means far more words are actually playable than this counts.
-  const TARGET = 4;
+  // Target a handful of line-words. The 27-cube grid has 27 word-capable
+  // lines (each 3 cells long), so this is intentionally modest; free-form
+  // (anagram) selection means far more words are actually playable.
+  const TARGET = 6;
   let best = null;
   let bestCount = -1;
   for (let attempt = 0; attempt < 50; attempt++) {
@@ -1318,7 +1331,46 @@ renderer.domElement.addEventListener('pointerup', (e) => {
     clearSelection();
   }
 });
-renderer.domElement.addEventListener('wheel', resetIdle, { passive: true });
+// --- Wheel: two-finger trackpad swipe orbits; pinch (ctrl+wheel) zooms. ---
+// OrbitControls reads the camera position fresh each update(), so nudging
+// camera.position here composes cleanly with damping and middle-mouse orbit.
+const WHEEL_ROTATE_SPEED = 0.0026;
+const _wheelOffset = new THREE.Vector3();
+const _wheelSph = new THREE.Spherical();
+const POLAR_EPS = 0.000001;
+
+function orbitByWheel(deltaX, deltaY) {
+  _wheelOffset.copy(camera.position).sub(controls.target);
+  _wheelSph.setFromVector3(_wheelOffset);
+  _wheelSph.theta -= deltaX * WHEEL_ROTATE_SPEED;
+  _wheelSph.phi -= deltaY * WHEEL_ROTATE_SPEED;
+  _wheelSph.phi = Math.max(POLAR_EPS, Math.min(Math.PI - POLAR_EPS, _wheelSph.phi));
+  _wheelSph.makeSafe();
+  _wheelOffset.setFromSpherical(_wheelSph);
+  camera.position.copy(controls.target).add(_wheelOffset);
+}
+
+function dollyByWheel(deltaY) {
+  _wheelOffset.copy(camera.position).sub(controls.target);
+  const scale = Math.pow(0.95, -deltaY * 0.02); // deltaY>0 (pinch in) -> zoom out
+  const r = Math.max(
+    controls.minDistance,
+    Math.min(controls.maxDistance, _wheelOffset.length() * scale)
+  );
+  _wheelOffset.setLength(r);
+  camera.position.copy(controls.target).add(_wheelOffset);
+}
+
+renderer.domElement.addEventListener(
+  'wheel',
+  (e) => {
+    e.preventDefault();
+    resetIdle();
+    if (e.ctrlKey) dollyByWheel(e.deltaY); // trackpad pinch arrives as ctrl+wheel
+    else orbitByWheel(e.deltaX, e.deltaY); // two-finger swipe -> rotate
+  },
+  { passive: false }
+);
 controls.addEventListener('start', resetIdle);
 
 window.addEventListener('keydown', (e) => {
