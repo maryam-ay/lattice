@@ -1,6 +1,6 @@
 // ===================================================================
 //  LATTICE — a 3D word puzzle adrift in deep space
-//  Plain JS + Three.js.  Find words along the rows of a 4x4x4 grid of
+//  Plain JS + Three.js.  Find words along the rows of a 3x3x2 grid of
 //  glowing letter cubes; clear them, let gravity collapse the lattice,
 //  and try to dissolve the whole structure.
 // ===================================================================
@@ -149,9 +149,11 @@ function randomLetter() {
 // -------------------------------------------------------------------
 //  CONSTANTS
 // -------------------------------------------------------------------
-const SIZE = 4;
+// Grid dimensions: 3 wide (x), 3 tall (y), 2 deep (z) = 18 cubes.
+const SIZE_X = 3;
+const SIZE_Y = 3;
+const SIZE_Z = 2;
 const SPACING = 2.2;
-const OFFSET = ((SIZE - 1) * SPACING) / 2; // 3.3 -> centers grid on origin
 const CUBE_SIZE = 1.5;
 
 const COL_EDGE = 0x00aaff;
@@ -161,7 +163,7 @@ const COL_INVALID = 0xff3333;
 const COL_WHITE = 0xffffff;
 const EDGE_OPACITY = 0.4;
 
-const TIMER_START = 60; // seconds on the countdown clock
+const TIMER_START = 90; // seconds on the countdown clock
 const MAX_HINTS = 3;
 const MAX_TRIES = 3;
 const COL_HINT = 0xffcc33; // gold pulse for hinted cubes
@@ -169,7 +171,12 @@ const COL_HINT = 0xffcc33; // gold pulse for hinted cubes
 const ASSEMBLE_DURATION = 0.7;
 const ASSEMBLE_TOTAL = 1.5;
 
-const gridToWorld = (g) => g * SPACING - OFFSET;
+// Per-axis world coordinate so a non-cubic grid still centers on the origin.
+const axisOffset = (size) => ((size - 1) * SPACING) / 2;
+const gridToWorld = (g, size) => g * SPACING - axisOffset(size);
+const xToWorld = (x) => gridToWorld(x, SIZE_X);
+const yToWorld = (y) => gridToWorld(y, SIZE_Y);
+const zToWorld = (z) => gridToWorld(z, SIZE_Z);
 
 // -------------------------------------------------------------------
 //  EASING
@@ -226,14 +233,14 @@ const camera = new THREE.PerspectiveCamera(
   0.1,
   3000
 );
-camera.position.set(8, 6, 14);
+camera.position.set(4.5, 3.5, 8.5);
 
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.target.set(0, 0, 0);
 controls.enableDamping = true;
 controls.dampingFactor = 0.08;
-controls.minDistance = 8;
-controls.maxDistance = 35;
+controls.minDistance = 5;
+controls.maxDistance = 22;
 controls.autoRotate = false;
 controls.autoRotateSpeed = 0.4;
 controls.enablePan = false;
@@ -423,15 +430,15 @@ function updateShootingStars(dt) {
 // -------------------------------------------------------------------
 {
   const pts = [];
-  for (let x = 0; x < SIZE; x++)
-    for (let y = 0; y < SIZE; y++)
-      for (let z = 0; z < SIZE; z++) {
-        const px = gridToWorld(x);
-        const py = gridToWorld(y);
-        const pz = gridToWorld(z);
-        if (x < SIZE - 1) pts.push(px, py, pz, gridToWorld(x + 1), py, pz);
-        if (y < SIZE - 1) pts.push(px, py, pz, px, gridToWorld(y + 1), pz);
-        if (z < SIZE - 1) pts.push(px, py, pz, px, py, gridToWorld(z + 1));
+  for (let x = 0; x < SIZE_X; x++)
+    for (let y = 0; y < SIZE_Y; y++)
+      for (let z = 0; z < SIZE_Z; z++) {
+        const px = xToWorld(x);
+        const py = yToWorld(y);
+        const pz = zToWorld(z);
+        if (x < SIZE_X - 1) pts.push(px, py, pz, xToWorld(x + 1), py, pz);
+        if (y < SIZE_Y - 1) pts.push(px, py, pz, px, yToWorld(y + 1), pz);
+        if (z < SIZE_Z - 1) pts.push(px, py, pz, px, py, zToWorld(z + 1));
       }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
@@ -571,7 +578,7 @@ function makeCube(letter, gx, gy, gz) {
   bloom.visible = false;
 
   group.add(mesh, edges, bloom);
-  group.position.set(gridToWorld(gx), gridToWorld(gy), gridToWorld(gz));
+  group.position.set(xToWorld(gx), yToWorld(gy), zToWorld(gz));
 
   const cube = {
     group, mesh, edges, bloom, mat, edgeMat, bloomMat,
@@ -619,21 +626,28 @@ function scanGrid(getCell) {
     if (run.length >= 3) checkRun(run);
   };
 
-  for (let a = 0; a < SIZE; a++) {
-    for (let b = 0; b < SIZE; b++) {
-      const lineX = [];
-      const lineY = [];
-      const lineZ = [];
-      for (let v = 0; v < SIZE; v++) {
-        lineX.push(getCell(v, a, b));
-        lineY.push(getCell(a, v, b));
-        lineZ.push(getCell(a, b, v));
-      }
-      scanLine(lineX);
-      scanLine(lineY);
-      scanLine(lineZ);
+  // X-aligned lines (vary x; fixed y, z)
+  for (let y = 0; y < SIZE_Y; y++)
+    for (let z = 0; z < SIZE_Z; z++) {
+      const line = [];
+      for (let x = 0; x < SIZE_X; x++) line.push(getCell(x, y, z));
+      scanLine(line);
     }
-  }
+  // Y-aligned lines (vary y; fixed x, z)
+  for (let x = 0; x < SIZE_X; x++)
+    for (let z = 0; z < SIZE_Z; z++) {
+      const line = [];
+      for (let y = 0; y < SIZE_Y; y++) line.push(getCell(x, y, z));
+      scanLine(line);
+    }
+  // Z-aligned lines (vary z; fixed x, y) — only 2 deep, so never long enough
+  // for a word, but kept for completeness if depth ever grows.
+  for (let x = 0; x < SIZE_X; x++)
+    for (let y = 0; y < SIZE_Y; y++) {
+      const line = [];
+      for (let z = 0; z < SIZE_Z; z++) line.push(getCell(x, y, z));
+      scanLine(line);
+    }
   return found;
 }
 
@@ -641,25 +655,29 @@ function scanGrid(getCell) {
 //  SEEDING  (guarantee >= 12 words; up to 50 attempts)
 // -------------------------------------------------------------------
 function seedLetters() {
+  // Target a handful of line-words. The 18-cube grid has at most ~12 word-
+  // capable lines, so this is intentionally modest; free-form (anagram)
+  // selection means far more words are actually playable than this counts.
+  const TARGET = 4;
   let best = null;
   let bestCount = -1;
   for (let attempt = 0; attempt < 50; attempt++) {
     const L = [];
-    for (let x = 0; x < SIZE; x++) {
+    for (let x = 0; x < SIZE_X; x++) {
       L[x] = [];
-      for (let y = 0; y < SIZE; y++) {
+      for (let y = 0; y < SIZE_Y; y++) {
         L[x][y] = [];
-        for (let z = 0; z < SIZE; z++) L[x][y][z] = randomLetter();
+        for (let z = 0; z < SIZE_Z; z++) L[x][y][z] = randomLetter();
       }
     }
     const count = scanGrid((x, y, z) => ({ letter: L[x][y][z] })).length;
-    if (count >= 12) return L;
+    if (count >= TARGET) return L;
     if (count > bestCount) {
       bestCount = count;
       best = L;
     }
   }
-  return best; // best effort if we somehow never reach 12
+  return best; // best effort if we never reach the target
 }
 
 // -------------------------------------------------------------------
@@ -681,11 +699,11 @@ function buildGrid() {
   const L = seedLetters();
   grid = [];
   cubes = [];
-  for (let x = 0; x < SIZE; x++) {
+  for (let x = 0; x < SIZE_X; x++) {
     grid[x] = [];
-    for (let y = 0; y < SIZE; y++) {
+    for (let y = 0; y < SIZE_Y; y++) {
       grid[x][y] = [];
-      for (let z = 0; z < SIZE; z++) {
+      for (let z = 0; z < SIZE_Z; z++) {
         const cube = makeCube(L[x][y][z], x, y, z);
         grid[x][y][z] = cube;
         cubes.push(cube);
@@ -1020,17 +1038,17 @@ function removeCube(c) {
 // gravity along -Y: each column (x,z) collapses toward y = 0
 function applyGravity() {
   let moved = false;
-  for (let x = 0; x < SIZE; x++) {
-    for (let z = 0; z < SIZE; z++) {
+  for (let x = 0; x < SIZE_X; x++) {
+    for (let z = 0; z < SIZE_Z; z++) {
       let writeY = 0;
-      for (let y = 0; y < SIZE; y++) {
+      for (let y = 0; y < SIZE_Y; y++) {
         const c = grid[x][y][z];
         if (!c) continue;
         if (y !== writeY) {
           grid[x][y][z] = null;
           grid[x][writeY][z] = c;
           c.gy = writeY;
-          fallTween(c, gridToWorld(writeY));
+          fallTween(c, yToWorld(writeY));
           moved = true;
         }
         writeY += 1;
@@ -1285,11 +1303,20 @@ renderer.domElement.addEventListener('pointerup', (e) => {
   const dx = e.clientX - pointerDown.x;
   const dy = e.clientY - pointerDown.y;
   pointerDown = null;
-  if (Math.hypot(dx, dy) > 6) return; // it was a drag (orbit), not a click
+  // Moved more than 5px between down and up -> treat as a rotate/orbit
+  // gesture (e.g. trackpad two-finger swipe), never a cube selection.
+  if (Math.hypot(dx, dy) > 5) return;
   if (interactionLocked || gameState !== 'playing') return;
   const cube = raycastCube(e.clientX, e.clientY);
-  if (cube) onCubeClick(cube);
-  else clearSelection();
+  if (cube) {
+    // Stop the click here so it can never bubble up and trigger anything
+    // else (e.g. a stray game reset). Only the New Game / Play Again
+    // buttons may start a new game.
+    e.stopPropagation();
+    onCubeClick(cube);
+  } else {
+    clearSelection();
+  }
 });
 renderer.domElement.addEventListener('wheel', resetIdle, { passive: true });
 controls.addEventListener('start', resetIdle);
@@ -1299,6 +1326,14 @@ window.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') {
     e.preventDefault();
     submit();
+  } else if (e.key === 'Backspace') {
+    // Deselect the most recently added cube and drop the last letter from
+    // the word display. Do nothing if the selection is already empty.
+    e.preventDefault();
+    if (gameState === 'playing' && selection.length > 0) {
+      setSelection(selection.slice(0, -1));
+      updateWordHUD();
+    }
   } else if (e.key === 'Escape') {
     if (gameState === 'playing') clearSelection();
   }
