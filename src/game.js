@@ -165,7 +165,7 @@ const COL_HOVER_EDGE = 0x66ddff; // brighter than rest edge, softer than select
 const COL_HOVER_FACE = 0xcdeeff; // faint cyan tint on the face while hovering
 const EDGE_OPACITY = 0.4;
 
-const TIMER_START = 90; // seconds on the countdown clock
+const TIMER_START = 60; // seconds on the countdown clock
 const MAX_HINTS = 3;
 const MAX_TRIES = 3;
 const COL_HINT = 0xffcc33; // gold pulse for hinted cubes
@@ -1121,7 +1121,12 @@ function winGame() {
       starGroup.scale.setScalar(s0 + (5 - s0) * e);
     },
   });
-  showMessage('LATTICE COMPLETE', `FINAL SCORE ${targetScore}`, 'New Game');
+  // Celebratory clear: big glowing title + final score and words-found count.
+  showMessage(
+    'LATTICE CLEARED',
+    `FINAL SCORE ${targetScore} · ${foundCount} WORDS FOUND`,
+    'Play Again'
+  );
 }
 
 function noMoreWords() {
@@ -1140,13 +1145,13 @@ function noMoreWords() {
 //  NEW GAME
 // -------------------------------------------------------------------
 function newGame() {
-  // HARD GUARD: a restart is only ever allowed from a real button click.
-  // `event` is the global event currently being dispatched (window.event):
-  // during a button's click handler it is a 'click'; for a keypress, canvas
-  // tap, overlay tap, or programmatic call it is anything-but-click (or
-  // undefined), so we bail. This makes the New Game / Play Again buttons the
-  // sole restart path on both desktop and mobile.
-  if (event && event.type !== 'click') return;
+  // Swallow the originating event so a restart can never bubble or fire a
+  // default action. newGame is only ever called from the two button click
+  // handlers below — nothing else in the codebase invokes it.
+  if (typeof event !== 'undefined') {
+    event.stopPropagation();
+    event.preventDefault();
+  }
   hideMessage();
   tweens = [];
   clearGridObjects();
@@ -1373,6 +1378,10 @@ inputLayer.addEventListener('pointercancel', (e) => {
   if (pointerDown && pointerDown.id === e.pointerId) pointerDown = null;
 });
 inputLayer.addEventListener('pointerup', (e) => {
+  // Never treat a release on a reset button as scene input. (Belt-and-braces:
+  // those buttons live in the HUD, not this layer, but this guarantees this
+  // handler can never run for them.) This handler NEVER calls newGame/init.
+  if (e.target === elNewGame || e.target === elMsgBtn) return;
   resetIdle();
   // Only the pointer we started tracking can produce a tap-select.
   if (!pointerDown || pointerDown.id !== e.pointerId) return;
@@ -1384,6 +1393,8 @@ inputLayer.addEventListener('pointerup', (e) => {
   if (Math.hypot(dx, dy) >= TAP_THRESHOLD) return;
   if (interactionLocked || gameState !== 'playing') return;
   const cube = raycastCube(e.clientX, e.clientY);
+  // The only outcomes of a tap: select/deselect a cube, or clear the
+  // selection. No restart path exists here.
   if (cube) onCubeClick(cube);
   else clearSelection();
 });
@@ -1449,10 +1460,8 @@ window.addEventListener('keydown', (e) => {
   }
 });
 
-// Every button runs through here: stopPropagation + preventDefault so a click
-// can't bubble or do anything else, then fn() runs while window.event is still
-// the click (which is what newGame's guard checks), then blur() drops focus so
-// the Enter key can't re-fire the button later.
+// Non-reset buttons: stopPropagation + preventDefault, run the action, then
+// blur so the Enter key can't re-fire the focused button later.
 function bindButton(el, fn) {
   el.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -1461,13 +1470,24 @@ function bindButton(el, fn) {
     el.blur();
   });
 }
-// Only these four buttons have click handlers; reset (newGame) is wired to
-// exactly two of them — New Game and the overlay's Play Again. The input layer
-// and canvas have no click/reset handler of any kind.
 bindButton(elSubmit, submit);
 bindButton(elHintBtn, useHint);
-bindButton(elNewGame, newGame);
-bindButton(elMsgBtn, newGame);
+
+// RESTART — the ONLY two places newGame is ever called. Both are explicit
+// 'click' handlers on the New Game and Play Again buttons. No keyboard key,
+// no canvas/overlay tap, and no pointer handler calls newGame anywhere else.
+elNewGame.addEventListener('click', (e) => {
+  e.stopPropagation();
+  e.preventDefault();
+  newGame();
+  elNewGame.blur();
+});
+elMsgBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  e.preventDefault();
+  newGame();
+  elMsgBtn.blur();
+});
 
 function handleResize() {
   camera.aspect = window.innerWidth / window.innerHeight;
