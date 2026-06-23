@@ -44,10 +44,11 @@
         height: 100%;
         z-index: 0;
         display: block;
-        /* The 3D canvas must never show a hand cursor — only the explicit
-           reset buttons do. !important guards against anything overriding it. */
-        cursor: default !important;
-        touch-action: none; /* let us own touch gestures (pan/zoom/rotate) */
+        /* The canvas itself receives NO pointer events. A transparent
+           #input-layer on top captures them for OrbitControls + raycasting,
+           so the canvas can never carry a hand cursor or a click handler. */
+        pointer-events: none;
+        cursor: default;
       }
 
       /* --- subtle vignette to darken the edges of the frame --- */
@@ -64,11 +65,26 @@
         );
       }
 
-      /* --- HUD layer --- */
-      #hud {
+      /* --- transparent input surface (the ONLY thing over the scene that
+             captures pointer events) — drives cube selection + OrbitControls.
+             Always a default cursor, never a pointer, and it has no click /
+             tap handler that could restart the game. --- */
+      #input-layer {
         position: fixed;
         inset: 0;
         z-index: 2;
+        pointer-events: auto;
+        cursor: default !important;
+        touch-action: none; /* we own all touch gestures (rotate/select) */
+        background: transparent;
+      }
+
+      /* --- HUD layer (above the input surface; click-through except the
+             explicit buttons, which re-enable pointer-events) --- */
+      #hud {
+        position: fixed;
+        inset: 0;
+        z-index: 3;
         pointer-events: none;
         font-family: var(--mono);
       }
@@ -101,7 +117,7 @@
         text-shadow: none;
       }
 
-      /* --- top center: the 60s countdown clock --- */
+      /* --- top center: the 90s countdown clock --- */
       #timer {
         position: absolute;
         top: 16px;
@@ -569,6 +585,9 @@
   <body>
     <canvas id="scene"></canvas>
     <div id="vignette"></div>
+    <!-- Transparent surface that captures all pointer input for the scene
+         (OrbitControls + cube raycasting). No click/reset handler lives here. -->
+    <div id="input-layer"></div>
 
     <div id="hud">
       <div id="words-found">
@@ -580,7 +599,7 @@
         <div id="score">0</div>
       </div>
 
-      <div id="timer">60</div>
+      <div id="timer">90</div>
 
       <div id="word-top">
         <div id="current-word"></div>

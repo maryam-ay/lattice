@@ -165,7 +165,7 @@ const COL_HOVER_EDGE = 0x66ddff; // brighter than rest edge, softer than select
 const COL_HOVER_FACE = 0xcdeeff; // faint cyan tint on the face while hovering
 const EDGE_OPACITY = 0.4;
 
-const TIMER_START = 60; // seconds on the countdown clock
+const TIMER_START = 90; // seconds on the countdown clock
 const MAX_HINTS = 3;
 const MAX_TRIES = 3;
 const COL_HINT = 0xffcc33; // gold pulse for hinted cubes
@@ -227,9 +227,11 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setClearColor(0x000000, 1);
 
-// The canvas must never show a hand/pointer cursor — only the New Game and
-// Play Again buttons do. Nothing in this file ever sets it to anything else.
-canvas.style.cursor = 'default';
+// The canvas has pointer-events:none (see CSS). All pointer input for the
+// scene — OrbitControls AND cube raycasting — is captured by this transparent
+// layer sitting on top of the canvas. It always shows a default cursor and
+// has no click/tap handler that could restart the game.
+const inputLayer = $('input-layer');
 
 const scene = new THREE.Scene();
 
@@ -241,7 +243,13 @@ const camera = new THREE.PerspectiveCamera(
 );
 camera.position.set(5.5, 4.5, 9.5);
 
-const controls = new OrbitControls(camera, renderer.domElement);
+// OrbitControls listens on the transparent input layer (NOT the canvas, which
+// has pointer-events:none). Left-click drag (desktop) and single-finger drag
+// (mobile) both orbit via OrbitControls' defaults — we deliberately leave
+// mouseButtons and touches at their defaults so nothing blocks them. The 8px
+// move threshold in the pointerup handler decides tap (select) vs drag
+// (rotate), the single fix that resolves selection-vs-rotation everywhere.
+const controls = new OrbitControls(camera, inputLayer);
 controls.target.set(0, 0, 0);
 controls.enableDamping = true;
 controls.dampingFactor = 0.15;
@@ -251,26 +259,8 @@ controls.maxDistance = 24;
 controls.autoRotate = false;
 controls.autoRotateSpeed = 0.4;
 controls.enablePan = false;
-
-// Rotation gestures (DESKTOP): left-click drag orbits, and a two-finger
-// trackpad swipe orbits (handled as a wheel event further down). A tap that
-// barely moves is still treated as a cube selection (see the 5px test in the
-// pointerup handler), so clicking a cube doesn't spin the grid.
-controls.mouseButtons = {
-  LEFT: THREE.MOUSE.ROTATE,
-  MIDDLE: THREE.MOUSE.ROTATE,
-  RIGHT: null,
-};
-// Rotation gestures (MOBILE): one finger is reserved for tap-to-select, two
-// fingers rotate the grid. DOLLY_ROTATE is the two-finger mode; with
-// enableZoom off (below) OrbitControls runs only its rotate half, so a
-// two-finger swipe orbits and no accidental dolly fights our framing.
-controls.touches = {
-  ONE: null,
-  TWO: THREE.TOUCH.DOLLY_ROTATE,
-};
-// We drive zoom + two-finger-swipe rotation ourselves from the wheel event,
-// so disable OrbitControls' built-in wheel dolly.
+// We drive zoom (trackpad pinch) ourselves from the wheel event, so disable
+// OrbitControls' built-in wheel dolly. Rotation (mouse + touch) is untouched.
 controls.enableZoom = false;
 
 // Bounding-sphere radius of the whole lattice (corner of the outermost cube).
@@ -1150,6 +1140,13 @@ function noMoreWords() {
 //  NEW GAME
 // -------------------------------------------------------------------
 function newGame() {
+  // HARD GUARD: a restart is only ever allowed from a real button click.
+  // `event` is the global event currently being dispatched (window.event):
+  // during a button's click handler it is a 'click'; for a keypress, canvas
+  // tap, overlay tap, or programmatic call it is anything-but-click (or
+  // undefined), so we bail. This makes the New Game / Play Again buttons the
+  // sole restart path on both desktop and mobile.
+  if (event && event.type !== 'click') return;
   hideMessage();
   tweens = [];
   clearGridObjects();
@@ -1338,7 +1335,7 @@ function resetIdle() {
 }
 
 function raycastCube(clientX, clientY) {
-  const rect = renderer.domElement.getBoundingClientRect();
+  const rect = inputLayer.getBoundingClientRect();
   ndc.x = ((clientX - rect.left) / rect.width) * 2 - 1;
   ndc.y = -((clientY - rect.top) / rect.height) * 2 + 1;
   raycaster.setFromCamera(ndc, camera);
@@ -1347,59 +1344,48 @@ function raycastCube(clientX, clientY) {
   return hits.length ? hits[0].object.userData.cube : null;
 }
 
-// Active pointers — so a two-finger touch gesture (rotate) is never mistaken
-// for a one-finger tap (select) on mobile.
-const activePointers = new Set();
-let multiTouchGesture = false;
+// CLICK vs DRAG — one unified rule for mouse, pen, and touch (pointer events
+// only, no separate mouse/touch paths). pointerdown records the start point
+// for that pointer id; pointerup measures the distance moved:
+//   < TAP_THRESHOLD px  -> tap   -> select / deselect a cube
+//   >= TAP_THRESHOLD px -> drag  -> it was an OrbitControls rotate; no select
+const TAP_THRESHOLD = 8;
 
-renderer.domElement.addEventListener('pointerdown', (e) => {
+inputLayer.addEventListener('pointerdown', (e) => {
   ensureAudio();
   resetIdle();
-  activePointers.add(e.pointerId);
-  if (activePointers.size > 1) multiTouchGesture = true;
-  pointerDown = { x: e.clientX, y: e.clientY };
+  // Track only one pointer at a time; a second finger (rotate gesture)
+  // overwrites it, so its eventual pointerup won't be read as a tap.
+  pointerDown = { id: e.pointerId, x: e.clientX, y: e.clientY };
 });
-renderer.domElement.addEventListener('pointercancel', (e) => {
-  activePointers.delete(e.pointerId);
-  if (activePointers.size === 0) multiTouchGesture = false;
-});
-// Track which cube the cursor is over so styleCubes() can give it a soft
-// pre-selection glow. No game state changes here — purely visual.
-renderer.domElement.addEventListener('pointermove', (e) => {
+// Hover pre-selection glow (purely visual; no game state changes).
+inputLayer.addEventListener('pointermove', (e) => {
   if (interactionLocked || gameState !== 'playing') {
     hoveredCube = null;
     return;
   }
   hoveredCube = raycastCube(e.clientX, e.clientY);
 });
-renderer.domElement.addEventListener('pointerleave', () => {
+inputLayer.addEventListener('pointerleave', () => {
   hoveredCube = null;
 });
-renderer.domElement.addEventListener('pointerup', (e) => {
+inputLayer.addEventListener('pointercancel', (e) => {
+  if (pointerDown && pointerDown.id === e.pointerId) pointerDown = null;
+});
+inputLayer.addEventListener('pointerup', (e) => {
   resetIdle();
-  const wasMultiTouch = multiTouchGesture;
-  activePointers.delete(e.pointerId);
-  if (activePointers.size === 0) multiTouchGesture = false;
-  if (!pointerDown) return;
+  // Only the pointer we started tracking can produce a tap-select.
+  if (!pointerDown || pointerDown.id !== e.pointerId) return;
   const dx = e.clientX - pointerDown.x;
   const dy = e.clientY - pointerDown.y;
   pointerDown = null;
-  // A two-finger gesture (rotate) is never a cube selection.
-  if (wasMultiTouch) return;
-  // Moved more than 5px between down and up -> treat as a rotate/orbit
-  // gesture (e.g. trackpad two-finger swipe or a drag), never a selection.
-  if (Math.hypot(dx, dy) > 5) return;
+  // Moved past the threshold -> it was a drag/swipe (OrbitControls already
+  // rotated); never a cube selection.
+  if (Math.hypot(dx, dy) >= TAP_THRESHOLD) return;
   if (interactionLocked || gameState !== 'playing') return;
   const cube = raycastCube(e.clientX, e.clientY);
-  if (cube) {
-    // Stop the click here so it can never bubble up and trigger anything
-    // else (e.g. a stray game reset). Only the New Game / Play Again
-    // buttons may start a new game.
-    e.stopPropagation();
-    onCubeClick(cube);
-  } else {
-    clearSelection();
-  }
+  if (cube) onCubeClick(cube);
+  else clearSelection();
 });
 // --- Wheel: two-finger trackpad swipe orbits; pinch (ctrl+wheel) zooms. ---
 // OrbitControls reads the camera position fresh each update(), so nudging
@@ -1433,7 +1419,7 @@ function dollyByWheel(deltaY) {
   camera.position.copy(controls.target).add(_wheelOffset);
 }
 
-renderer.domElement.addEventListener(
+inputLayer.addEventListener(
   'wheel',
   (e) => {
     e.preventDefault();
@@ -1463,20 +1449,21 @@ window.addEventListener('keydown', (e) => {
   }
 });
 
-// Blur after click so a lingering button focus can't be re-fired by the
-// Enter key (that was the cause of stray New Game restarts during play).
-// stopPropagation keeps a button click from bubbling anywhere else.
+// Every button runs through here: stopPropagation + preventDefault so a click
+// can't bubble or do anything else, then fn() runs while window.event is still
+// the click (which is what newGame's guard checks), then blur() drops focus so
+// the Enter key can't re-fire the button later.
 function bindButton(el, fn) {
   el.addEventListener('click', (e) => {
     e.stopPropagation();
     e.preventDefault();
-    el.blur();
     fn();
+    el.blur();
   });
 }
 // Only these four buttons have click handlers; reset (newGame) is wired to
-// exactly two of them — New Game and the overlay's Play Again. The canvas
-// has no click/reset handler of any kind.
+// exactly two of them — New Game and the overlay's Play Again. The input layer
+// and canvas have no click/reset handler of any kind.
 bindButton(elSubmit, submit);
 bindButton(elHintBtn, useHint);
 bindButton(elNewGame, newGame);
