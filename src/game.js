@@ -161,6 +161,8 @@ const COL_SELECT = 0x00ffff;
 const COL_VALID = 0x00ff88;
 const COL_INVALID = 0xff3333;
 const COL_WHITE = 0xffffff;
+const COL_HOVER_EDGE = 0x66ddff; // brighter than rest edge, softer than select
+const COL_HOVER_FACE = 0xcdeeff; // faint cyan tint on the face while hovering
 const EDGE_OPACITY = 0.4;
 
 const TIMER_START = 90; // seconds on the countdown clock
@@ -238,7 +240,8 @@ camera.position.set(5.5, 4.5, 9.5);
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.target.set(0, 0, 0);
 controls.enableDamping = true;
-controls.dampingFactor = 0.08;
+controls.dampingFactor = 0.15;
+controls.rotateSpeed = 2.0; // responsive orbit (also scales trackpad swipe)
 controls.minDistance = 6;
 controls.maxDistance = 24;
 controls.autoRotate = false;
@@ -511,6 +514,7 @@ let grid = []; // grid[x][y][z] -> cube | null
 let cubes = []; // flat list of live cubes
 let selection = []; // ordered list of selected cubes (click order)
 let selectionLights = [];
+let hoveredCube = null; // cube under the cursor — soft pre-selection glow
 
 let tweens = [];
 let interactionLocked = true; // unlocked once the grid finishes assembling
@@ -704,6 +708,7 @@ function clearGridObjects() {
     c.bloomMat.dispose();
   }
   cubes = [];
+  hoveredCube = null;
   for (const l of selectionLights) scene.remove(l);
   selectionLights = [];
 }
@@ -1039,6 +1044,7 @@ function fallTween(c, targetWorldY) {
 }
 
 function removeCube(c) {
+  if (c === hoveredCube) hoveredCube = null;
   scene.remove(c.group);
   c.mat.dispose();
   c.edgeMat.dispose();
@@ -1310,6 +1316,18 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
   resetIdle();
   pointerDown = { x: e.clientX, y: e.clientY };
 });
+// Track which cube the cursor is over so styleCubes() can give it a soft
+// pre-selection glow. No game state changes here — purely visual.
+renderer.domElement.addEventListener('pointermove', (e) => {
+  if (interactionLocked || gameState !== 'playing') {
+    hoveredCube = null;
+    return;
+  }
+  hoveredCube = raycastCube(e.clientX, e.clientY);
+});
+renderer.domElement.addEventListener('pointerleave', () => {
+  hoveredCube = null;
+});
 renderer.domElement.addEventListener('pointerup', (e) => {
   resetIdle();
   if (!pointerDown) return;
@@ -1334,16 +1352,18 @@ renderer.domElement.addEventListener('pointerup', (e) => {
 // --- Wheel: two-finger trackpad swipe orbits; pinch (ctrl+wheel) zooms. ---
 // OrbitControls reads the camera position fresh each update(), so nudging
 // camera.position here composes cleanly with damping and middle-mouse orbit.
-const WHEEL_ROTATE_SPEED = 0.0026;
+const WHEEL_ROTATE_SPEED = 0.0035; // base; multiplied by controls.rotateSpeed
 const _wheelOffset = new THREE.Vector3();
 const _wheelSph = new THREE.Spherical();
 const POLAR_EPS = 0.000001;
 
 function orbitByWheel(deltaX, deltaY) {
+  const k = WHEEL_ROTATE_SPEED * controls.rotateSpeed;
   _wheelOffset.copy(camera.position).sub(controls.target);
   _wheelSph.setFromVector3(_wheelOffset);
-  _wheelSph.theta -= deltaX * WHEEL_ROTATE_SPEED;
-  _wheelSph.phi -= deltaY * WHEEL_ROTATE_SPEED;
+  // swipe right -> grid rotates right (and swipe left -> left)
+  _wheelSph.theta += deltaX * k;
+  _wheelSph.phi += deltaY * k;
   _wheelSph.phi = Math.max(POLAR_EPS, Math.min(Math.PI - POLAR_EPS, _wheelSph.phi));
   _wheelSph.makeSafe();
   _wheelOffset.setFromSpherical(_wheelSph);
@@ -1393,12 +1413,17 @@ window.addEventListener('keydown', (e) => {
 
 // Blur after click so a lingering button focus can't be re-fired by the
 // Enter key (that was the cause of stray New Game restarts during play).
+// stopPropagation keeps a button click from bubbling anywhere else.
 function bindButton(el, fn) {
-  el.addEventListener('click', () => {
+  el.addEventListener('click', (e) => {
+    e.stopPropagation();
     el.blur();
     fn();
   });
 }
+// Only these four buttons have click handlers; reset (newGame) is wired to
+// exactly two of them — New Game and the overlay's Play Again. The canvas
+// has no click/reset handler of any kind.
 bindButton(elSubmit, submit);
 bindButton(elHintBtn, useHint);
 bindButton(elNewGame, newGame);
@@ -1439,6 +1464,21 @@ function styleCubes() {
       c.bloomMat.color.setHex(COL_HINT);
       c.bloomMat.opacity = 0.16 + 0.12 * pulse;
       c.mat.color.setHex(COL_WHITE);
+      c.mat.opacity = 1;
+    } else if (c === hoveredCube) {
+      // soft pre-selection glow: brighter edge + faint cyan face + tiny
+      // bloom — deliberately gentler than the full selected state.
+      const sc = c.group.scale;
+      const target = 1.05;
+      sc.x += (target - sc.x) * k;
+      sc.y += (target - sc.y) * k;
+      sc.z += (target - sc.z) * k;
+      c.edgeMat.color.setHex(COL_HOVER_EDGE);
+      c.edgeMat.opacity = 0.6;
+      c.bloom.visible = true;
+      c.bloomMat.color.setHex(COL_SELECT);
+      c.bloomMat.opacity = 0.05;
+      c.mat.color.setHex(COL_HOVER_FACE);
       c.mat.opacity = 1;
     } else {
       const sc = c.group.scale;
