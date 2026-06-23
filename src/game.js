@@ -1327,17 +1327,18 @@ function playHint() {
   tone(1320, 0.16, 'sine', 0.05, 0.06);
 }
 
-// -------------------------------------------------------------------
-//  INTERACTION (raycasting + idle auto-rotate)
-// -------------------------------------------------------------------
+// ===================================================================
+//  EVENT HANDLING  —  REBUILT FROM SCRATCH
+//  This is the COMPLETE and ONLY set of event listeners in the game:
+//    1. pointerdown / pointermove / pointerup  (on the input layer)
+//    2. click  (on the two restart buttons, and nowhere else)
+//    3. keydown  (Enter = submit, Backspace = remove last letter)
+//  There are no touch listeners, no click on the canvas/document/window,
+//  and nothing else of any kind. OrbitControls' own internal listeners
+//  drive rotation when a gesture is a drag.
+// ===================================================================
 const raycaster = new THREE.Raycaster();
 const ndc = new THREE.Vector2();
-let pointerDown = null;
-
-function resetIdle() {
-  lastInteract = now;
-  controls.autoRotate = false;
-}
 
 function raycastCube(clientX, clientY) {
   const rect = inputLayer.getBoundingClientRect();
@@ -1349,58 +1350,86 @@ function raycastCube(clientX, clientY) {
   return hits.length ? hits[0].object.userData.cube : null;
 }
 
-// CLICK vs DRAG — one unified rule for mouse, pen, and touch (pointer events
-// only, no separate mouse/touch paths). pointerdown records the start point
-// for that pointer id; pointerup measures the distance moved:
-//   < TAP_THRESHOLD px  -> tap   -> select / deselect a cube
-//   >= TAP_THRESHOLD px -> drag  -> it was an OrbitControls rotate; no select
-const TAP_THRESHOLD = 8;
-
-inputLayer.addEventListener('pointerdown', (e) => {
-  ensureAudio();
-  resetIdle();
-  // Track only one pointer at a time; a second finger (rotate gesture)
-  // overwrites it, so its eventual pointerup won't be read as a tap.
-  pointerDown = { id: e.pointerId, x: e.clientX, y: e.clientY };
-});
-// Hover pre-selection glow (purely visual; no game state changes).
-inputLayer.addEventListener('pointermove', (e) => {
-  if (interactionLocked || gameState !== 'playing') {
-    hoveredCube = null;
-    return;
-  }
-  hoveredCube = raycastCube(e.clientX, e.clientY);
-});
-inputLayer.addEventListener('pointerleave', () => {
-  hoveredCube = null;
-});
-inputLayer.addEventListener('pointercancel', (e) => {
-  if (pointerDown && pointerDown.id === e.pointerId) pointerDown = null;
-});
-inputLayer.addEventListener('pointerup', (e) => {
-  // Never treat a release on a reset button as scene input. (Belt-and-braces:
-  // those buttons live in the HUD, not this layer, but this guarantees this
-  // handler can never run for them.) This handler NEVER calls newGame/init.
-  if (e.target === elNewGame || e.target === elMsgBtn) return;
-  resetIdle();
-  // Only the pointer we started tracking can produce a tap-select.
-  if (!pointerDown || pointerDown.id !== e.pointerId) return;
-  const dx = e.clientX - pointerDown.x;
-  const dy = e.clientY - pointerDown.y;
-  pointerDown = null;
-  // Moved past the threshold -> it was a drag/swipe (OrbitControls already
-  // rotated); never a cube selection.
-  if (Math.hypot(dx, dy) >= TAP_THRESHOLD) return;
+// A tap selects/deselects a cube (or clears the selection on empty space).
+// selectCube CANNOT restart the game — it never calls newGame/init.
+function selectCube(e) {
   if (interactionLocked || gameState !== 'playing') return;
   const cube = raycastCube(e.clientX, e.clientY);
-  // The only outcomes of a tap: select/deselect a cube, or clear the
-  // selection. No restart path exists here.
   if (cube) onCubeClick(cube);
   else clearSelection();
+}
+
+// ---- 1. POINTER (tap vs drag, decided purely by an 8px move threshold) ----
+const TAP_THRESHOLD = 8;
+let pointerStart = null; // { x, y, t, id } — recorded on pointerdown
+let pointerMoved = 0; // px moved from the start — updated on pointermove
+
+inputLayer.addEventListener('pointerdown', (e) => {
+  // Record start position + time only. Nothing else.
+  pointerStart = { x: e.clientX, y: e.clientY, t: performance.now(), id: e.pointerId };
+  pointerMoved = 0;
 });
-// --- Wheel: two-finger trackpad swipe orbits; pinch (ctrl+wheel) zooms. ---
-// OrbitControls reads the camera position fresh each update(), so nudging
-// camera.position here composes cleanly with damping and middle-mouse orbit.
+inputLayer.addEventListener('pointermove', (e) => {
+  // Track movement delta only.
+  if (!pointerStart) return;
+  pointerMoved = Math.hypot(e.clientX - pointerStart.x, e.clientY - pointerStart.y);
+});
+inputLayer.addEventListener('pointerup', (e) => {
+  if (!pointerStart || e.pointerId !== pointerStart.id) {
+    pointerStart = null;
+    return;
+  }
+  const moved = pointerMoved;
+  pointerStart = null;
+  // < 8px -> a tap -> select a cube. >= 8px -> a drag -> do nothing
+  // (OrbitControls already handled the rotation). NEVER call newGame here.
+  if (moved < TAP_THRESHOLD) selectCube(e);
+});
+
+// ---- 2. RESTART BUTTONS (the only event paths that call newGame) ----
+elNewGame.addEventListener('click', (e) => {
+  e.stopPropagation();
+  e.preventDefault();
+  newGame();
+});
+elMsgBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  e.preventDefault();
+  newGame();
+});
+
+// ---- 2b. ACTION BUTTONS (submit a word / use a hint — never restart) ----
+elSubmit.addEventListener('click', (e) => {
+  e.stopPropagation();
+  e.preventDefault();
+  submit();
+});
+elHintBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  e.preventDefault();
+  useHint();
+});
+
+// ---- 3. KEYBOARD (Enter submits, Backspace removes letter, Esc clears) ----
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    submit();
+  } else if (e.key === 'Backspace') {
+    e.preventDefault();
+    if (gameState === 'playing' && selection.length > 0) {
+      setSelection(selection.slice(0, -1));
+      updateWordHUD();
+    }
+  } else if (e.key === 'Escape') {
+    if (gameState === 'playing') clearSelection();
+  }
+});
+
+// ---- 4. WHEEL (trackpad two-finger swipe orbits; pinch = ctrl+wheel zooms) ----
+// We drive these from the wheel event (enableZoom stays off) so a two-finger
+// swipe rotates instead of dollying. OrbitControls reads the camera position
+// fresh each update(), so nudging camera.position here composes cleanly.
 const WHEEL_ROTATE_SPEED = 0.0035; // base; multiplied by controls.rotateSpeed
 const _wheelOffset = new THREE.Vector3();
 const _wheelSph = new THREE.Spherical();
@@ -1410,8 +1439,7 @@ function orbitByWheel(deltaX, deltaY) {
   const k = WHEEL_ROTATE_SPEED * controls.rotateSpeed;
   _wheelOffset.copy(camera.position).sub(controls.target);
   _wheelSph.setFromVector3(_wheelOffset);
-  // swipe right -> grid rotates right (and swipe left -> left)
-  _wheelSph.theta += deltaX * k;
+  _wheelSph.theta += deltaX * k; // swipe right -> grid rotates right
   _wheelSph.phi += deltaY * k;
   _wheelSph.phi = Math.max(POLAR_EPS, Math.min(Math.PI - POLAR_EPS, _wheelSph.phi));
   _wheelSph.makeSafe();
@@ -1434,66 +1462,18 @@ inputLayer.addEventListener(
   'wheel',
   (e) => {
     e.preventDefault();
-    resetIdle();
     if (e.ctrlKey) dollyByWheel(e.deltaY); // trackpad pinch arrives as ctrl+wheel
     else orbitByWheel(e.deltaX, e.deltaY); // two-finger swipe -> rotate
   },
   { passive: false }
 );
-controls.addEventListener('start', resetIdle);
 
-window.addEventListener('keydown', (e) => {
-  resetIdle();
-  if (e.key === 'Enter') {
-    e.preventDefault();
-    submit();
-  } else if (e.key === 'Backspace') {
-    // Deselect the most recently added cube and drop the last letter from
-    // the word display. Do nothing if the selection is already empty.
-    e.preventDefault();
-    if (gameState === 'playing' && selection.length > 0) {
-      setSelection(selection.slice(0, -1));
-      updateWordHUD();
-    }
-  } else if (e.key === 'Escape') {
-    if (gameState === 'playing') clearSelection();
-  }
-});
-
-// Non-reset buttons: stopPropagation + preventDefault, run the action, then
-// blur so the Enter key can't re-fire the focused button later.
-function bindButton(el, fn) {
-  el.addEventListener('click', (e) => {
-    e.stopPropagation();
-    e.preventDefault();
-    fn();
-    el.blur();
-  });
-}
-bindButton(elSubmit, submit);
-bindButton(elHintBtn, useHint);
-
-// RESTART — the ONLY two places newGame is ever called. Both are explicit
-// 'click' handlers on the New Game and Play Again buttons. No keyboard key,
-// no canvas/overlay tap, and no pointer handler calls newGame anywhere else.
-elNewGame.addEventListener('click', (e) => {
-  e.stopPropagation();
-  e.preventDefault();
-  newGame();
-  elNewGame.blur();
-});
-elMsgBtn.addEventListener('click', (e) => {
-  e.stopPropagation();
-  e.preventDefault();
-  newGame();
-  elMsgBtn.blur();
-});
-
+// ---- 5. RESIZE (refit canvas + grid on window resize / phone rotation) ----
 function handleResize() {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
-  fitCameraToGrid(); // keep the grid framed on phones / after rotation
+  fitCameraToGrid();
 }
 window.addEventListener('resize', handleResize);
 window.addEventListener('orientationchange', handleResize);
@@ -1569,8 +1549,6 @@ function animate() {
 
   updateTweens();
 
-  if (now - lastInteract > 5 && gameState === 'playing')
-    controls.autoRotate = true;
   controls.update();
 
   styleCubes();
